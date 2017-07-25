@@ -1,8 +1,7 @@
 project(rl)
 
 cmake_minimum_required(VERSION 2.8)
-set(CMAKE_CXX_FLAGS "-std=c++11 -O3 -Wall")
-
+add_definitions("-std=c++11")
 find_package(Eigen3 REQUIRED)
 
 include_directories(${EIGEN3_INCLUDE_DIR})
