@@ -10,29 +10,22 @@
 //until a terminal state is reached
 
 enum class GameStatus {
-  X_WINS,
-  O_WINS,
-  X_TURN,
-  O_TURN,
-  DRAW
+  WIN,
+  DRAW,
+  IN_PROGRESS
 };
 
 std::string to_string(GameStatus status) {
   switch(status) {
-    case GameStatus::X_WINS:
-      return "X_WINS";
-    case GameStatus::O_WINS:
-      return "O_WINS";
-    case GameStatus::X_TURN:
-      return "X_TURN";
-    case GameStatus::O_TURN:
-      return "O_TURN";
+    case GameStatus::WIN:
+      return "WINS";
     case GameStatus::DRAW:
       return "DRAW";
+    case GameStatus::IN_PROGRESS:
+      return "IN_PROGRESS";
   }
   return "UNKNOWN";
 }
-
 
 struct TicTacToeAction {
   int row_index;
@@ -59,36 +52,16 @@ class TicTacToeBoard {
   }
   
   void Reset() {
-    game_status_ = GameStatus::X_TURN;
+    game_status_ = GameStatus::IN_PROGRESS;
     board_state_.fill('-');
-    x_turn_ = true;
   }
 
-  bool IsActionValid(TicTacToeAction const& action) const {
-    if(GameOver()) return false;
-    bool correct_turn = game_status_ == GameStatus::X_TURN ? action.value == 'x' : action.value == 'o';
-    if(!correct_turn) { 
-      std::cout << "Wrong Turn" << std::endl;
-      return false;
-    }
-    bool in_bounds = action.column_index < size && action.row_index < size;
-    if(!in_bounds) return false;
-    bool is_free = board_state_(action.row_index, action.column_index) == '-';
-    if(!is_free) {
-      std::cout << board_state_(action.row_index, action.column_index) << std::endl;
-      std::cout << "Tried to take a move on an occupied space" << std::endl;
-      return false;
-    }
-    return true;
-  }
-
-  std::vector<TicTacToeAction> GetAvailableActions() const {
+  std::vector<TicTacToeAction> GetAvailableActions(char value) const {
     std::vector<TicTacToeAction> actions;
-    char turn_value = game_status_ == GameStatus::X_TURN ? 'x' : 'o';
     for(int row_index = 0; row_index < size; row_index++) {
       for(int column_index = 0; column_index < size; column_index++) {
         if(board_state_(row_index, column_index) == '-') {
-          actions.push_back({row_index, column_index, turn_value});
+          actions.push_back({row_index, column_index, value});
         }
       }
     }
@@ -96,14 +69,8 @@ class TicTacToeBoard {
   }
 
   void ApplyAction(TicTacToeAction const& action) {
-    if(IsActionValid(action)) {
-      board_state_(action.row_index, action.column_index) = action.value;
-      x_turn_ = !x_turn_;
-      game_status_ = UpdateGameStatus(); 
-    } else {
-      std::cout << "Tried to apply invalid action " << to_string(action) << std::endl;
-      std::cout << board_state_ << std::endl;
-    }
+    board_state_(action.row_index, action.column_index) = action.value;
+    game_status_ = UpdateGameStatus(); 
   }
 
   GameStatus GetGameStatus() const {
@@ -111,9 +78,7 @@ class TicTacToeBoard {
   }
 
   bool GameOver() const {
-    return game_status_ == GameStatus::X_WINS 
-        || game_status_ == GameStatus::O_WINS
-        || game_status_ == GameStatus::DRAW;
+    return game_status_ != GameStatus::IN_PROGRESS;
   }
   
   std::string GetStateString() const {
@@ -125,31 +90,31 @@ class TicTacToeBoard {
   GameStatus UpdateGameStatus() {
     for(int row_index = 0; row_index < size; row_index++) {
       if(CheckRowValue(row_index, 'o')) {
-        return GameStatus::O_WINS;
+        return GameStatus::WIN;
       } else if(CheckRowValue(row_index, 'x')) {
-        return GameStatus::X_WINS;
+        return GameStatus::WIN;
       }
     }
 
     for(int column_index = 0; column_index < size; column_index++) {
       if(CheckColumnValue(column_index, 'o')) {
-        return GameStatus::O_WINS;
+        return GameStatus::WIN;
       } else if(CheckColumnValue(column_index, 'x')) {
-        return GameStatus::X_WINS;
+        return GameStatus::WIN;
       }
     }
 
     if(CheckFirstDiagonal('x') || CheckSecondDiagonal('x')) {
-      return GameStatus::X_WINS;
+      return GameStatus::WIN;
     } else if(CheckFirstDiagonal('o') || CheckSecondDiagonal('o')) {
-      return GameStatus::O_WINS;
+      return GameStatus::WIN;
     }
 
     if(BoardFull()) {
       return GameStatus::DRAW;
     }
   
-    return x_turn_ ? GameStatus::X_TURN : GameStatus::O_TURN;
+    return GameStatus::IN_PROGRESS;
   }
 
   bool CheckFirstDiagonal(char value) const {
@@ -203,22 +168,23 @@ class TicTacToeBoard {
   GameStatus game_status_;
   const int size = 3;
   const int string_size = size * size;
-  bool x_turn_;
 };
 
 class TicTacToeAgent {
 public:
-  TicTacToeAgent(TicTacToeBoard* game) : game_(game) { }
+  TicTacToeAgent(TicTacToeBoard* game, char which_player) 
+	  : game_(game), which_player_(which_player) { }
   virtual TicTacToeAction GetAction() const = 0;
 protected:
   TicTacToeBoard* game_;
+  char which_player_;
 };
 
 class PickFirstActionAgent : TicTacToeAgent {
   public:
-  PickFirstActionAgent(TicTacToeBoard* game) : TicTacToeAgent(game) { }
+  PickFirstActionAgent(TicTacToeBoard* game, char which_player) : TicTacToeAgent(game, which_player) { }
   virtual TicTacToeAction GetAction() const override {
-    std::vector<TicTacToeAction> actions = game_->GetAvailableActions();
+    std::vector<TicTacToeAction> actions = game_->GetAvailableActions(which_player_);
     if(actions.size() > 0) {
       return actions[0];
     }
@@ -228,9 +194,9 @@ class PickFirstActionAgent : TicTacToeAgent {
 
 class PickRandomActionAgent : TicTacToeAgent {
   public:
-  PickRandomActionAgent(TicTacToeBoard* game) : TicTacToeAgent(game) { }
+  PickRandomActionAgent(TicTacToeBoard* game, char which_player) : TicTacToeAgent(game, which_player) { }
   virtual TicTacToeAction GetAction() const override {
-    std::vector<TicTacToeAction> actions = game_->GetAvailableActions();
+    std::vector<TicTacToeAction> actions = game_->GetAvailableActions(which_player_);
     if(actions.size() > 0) {
       return actions[rand()%actions.size()];
     }
@@ -241,8 +207,8 @@ class PickRandomActionAgent : TicTacToeAgent {
 int main(int argc, char* argv[])  {
   TicTacToeBoard game;
   srand(time(0));
-  auto x_player = std::make_shared<PickRandomActionAgent>(&game);
-  auto o_player = std::make_shared<PickRandomActionAgent>(&game);
+  auto x_player = std::make_shared<PickRandomActionAgent>(&game, 'x');
+  auto o_player = std::make_shared<PickRandomActionAgent>(&game, 'o');
   using namespace std::chrono;
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
@@ -253,29 +219,13 @@ int main(int argc, char* argv[])  {
   
   for(int x = 0; x < num_games; x++) {
     game.Reset();
-    game_states.insert(game.GetStateString());
     while(true) {
-
       game.ApplyAction(x_player->GetAction());
-      game_states.insert(game.GetStateString());
       if(game.GameOver()) break;
       game.ApplyAction(o_player->GetAction());
-      game_states.insert(game.GetStateString());
       if(game.GameOver()) break;
     }
-    
-    switch(game.GetGameStatus()){
-      case GameStatus::X_WINS:
-        x_wins++;
-        break;
-      case GameStatus::O_WINS:
-        o_wins++;
-        break;
-      case GameStatus::DRAW:
-        draws++;
-        break;
-    }
-    
+    game_states.insert(game.GetStateString());
   }
  
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
