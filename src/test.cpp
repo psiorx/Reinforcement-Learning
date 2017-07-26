@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 #include <unordered_map>
+#include <set>
 #include <chrono>
 
 #include <Eigen/Dense>
@@ -58,9 +59,9 @@ class TicTacToeBoard {
   }
   
   void Reset() {
-    game_status_ = GameStatus::O_TURN;
+    game_status_ = GameStatus::X_TURN;
     board_state_.fill('-');
-    x_turn_ = false;
+    x_turn_ = true;
   }
 
   bool IsActionValid(TicTacToeAction const& action) const {
@@ -113,6 +114,10 @@ class TicTacToeBoard {
     return game_status_ == GameStatus::X_WINS 
         || game_status_ == GameStatus::O_WINS
         || game_status_ == GameStatus::DRAW;
+  }
+  
+  std::string GetStateString() const {
+    return std::string(board_state_.data(), string_size);
   }
 
   private: 
@@ -197,6 +202,7 @@ class TicTacToeBoard {
   BoardState board_state_;
   GameStatus game_status_;
   const int size = 3;
+  const int string_size = size * size;
   bool x_turn_;
 };
 
@@ -235,21 +241,29 @@ class PickRandomActionAgent : TicTacToeAgent {
 int main(int argc, char* argv[])  {
   TicTacToeBoard game;
   srand(time(0));
-  auto player1 = std::make_shared<PickRandomActionAgent>(&game);
-  auto player2 = std::make_shared<PickRandomActionAgent>(&game);
+  auto x_player = std::make_shared<PickRandomActionAgent>(&game);
+  auto o_player = std::make_shared<PickRandomActionAgent>(&game);
   using namespace std::chrono;
 
   high_resolution_clock::time_point t1 = high_resolution_clock::now();
   int x_wins=0, o_wins=0, draws=0;
   int num_games = 1e6;
+
+  std::set<std::string> game_states;
+  
   for(int x = 0; x < num_games; x++) {
     game.Reset();
+    game_states.insert(game.GetStateString());
     while(true) {
-      game.ApplyAction(player1->GetAction());
+
+      game.ApplyAction(x_player->GetAction());
+      game_states.insert(game.GetStateString());
       if(game.GameOver()) break;
-      game.ApplyAction(player2->GetAction());
+      game.ApplyAction(o_player->GetAction());
+      game_states.insert(game.GetStateString());
       if(game.GameOver()) break;
     }
+    
     switch(game.GetGameStatus()){
       case GameStatus::X_WINS:
         x_wins++;
@@ -263,14 +277,16 @@ int main(int argc, char* argv[])  {
     }
     
   }
-  
+ 
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-  std::cout << "Played " << num_games/time_span.count() << " games per second.";
-  std::cout << std::endl; 
 
+  //for(auto const& state : game_states) std::cout << state << std::endl;
+  std::cout << "Played " << num_games/time_span.count() << " games per second." << std::endl;
   std::cout << "x_wins: " << x_wins/(float)num_games*100 << std::endl;
   std::cout << "o_wins: " << o_wins/(float)num_games*100 << std::endl;
   std::cout << "draws: " << draws/(float)num_games*100 << std::endl;
+   
+  std::cout << game_states.size() << std::endl;
   
 }
