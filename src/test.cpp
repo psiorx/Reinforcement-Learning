@@ -10,15 +10,18 @@
 //until a terminal state is reached
 
 enum class GameStatus {
-  WIN,
+  X_WINS,
+  O_WINS,
   DRAW,
   IN_PROGRESS
 };
 
 std::string to_string(GameStatus status) {
   switch(status) {
-    case GameStatus::WIN:
-      return "WINS";
+    case GameStatus::X_WINS:
+      return "X_WINS";
+    case GameStatus::O_WINS:
+      return "O_WINS";
     case GameStatus::DRAW:
       return "DRAW";
     case GameStatus::IN_PROGRESS:
@@ -42,12 +45,12 @@ std::string to_string(TicTacToeAction const& action) {
 
 class TicTacToeBoard {
   public:
-  using BoardState = Eigen::Matrix<char, 3, 3>;
+  using BoardStateType = Eigen::Matrix<char, 3, 3>;
   TicTacToeBoard() {
     Reset(); 
   };
 
-  BoardState GetBoardState() const {
+  BoardStateType GetBoardState() const {
     return board_state_;
   }
   
@@ -90,24 +93,24 @@ class TicTacToeBoard {
   GameStatus UpdateGameStatus() {
     for(int row_index = 0; row_index < size; row_index++) {
       if(CheckRowValue(row_index, 'o')) {
-        return GameStatus::WIN;
+        return GameStatus::O_WINS;
       } else if(CheckRowValue(row_index, 'x')) {
-        return GameStatus::WIN;
+        return GameStatus::X_WINS;
       }
     }
 
     for(int column_index = 0; column_index < size; column_index++) {
       if(CheckColumnValue(column_index, 'o')) {
-        return GameStatus::WIN;
+        return GameStatus::O_WINS;
       } else if(CheckColumnValue(column_index, 'x')) {
-        return GameStatus::WIN;
+        return GameStatus::X_WINS;
       }
     }
 
     if(CheckFirstDiagonal('x') || CheckSecondDiagonal('x')) {
-      return GameStatus::WIN;
+      return GameStatus::X_WINS;
     } else if(CheckFirstDiagonal('o') || CheckSecondDiagonal('o')) {
-      return GameStatus::WIN;
+      return GameStatus::O_WINS;
     }
 
     if(BoardFull()) {
@@ -164,7 +167,7 @@ class TicTacToeBoard {
     return true;
   }
   
-  BoardState board_state_;
+  BoardStateType board_state_;
   GameStatus game_status_;
   const int size = 3;
   const int string_size = size * size;
@@ -172,19 +175,16 @@ class TicTacToeBoard {
 
 class TicTacToeAgent {
 public:
-  TicTacToeAgent(TicTacToeBoard* game, char which_player) 
-	  : game_(game), which_player_(which_player) { }
-  virtual TicTacToeAction GetAction() const = 0;
-protected:
-  TicTacToeBoard* game_;
-  char which_player_;
+  virtual TicTacToeAction GetAction(TicTacToeBoard* board, char mark) const = 0;
+  virtual void TakeAction(TicTacToeBoard* board, char mark) {
+    board->ApplyAction(GetAction(board, mark));
+  }
 };
 
-class PickFirstActionAgent : TicTacToeAgent {
-  public:
-  PickFirstActionAgent(TicTacToeBoard* game, char which_player) : TicTacToeAgent(game, which_player) { }
-  virtual TicTacToeAction GetAction() const override {
-    std::vector<TicTacToeAction> actions = game_->GetAvailableActions(which_player_);
+class PickFirstActionAgent : public TicTacToeAgent {
+public:
+  virtual TicTacToeAction GetAction(TicTacToeBoard* board, char mark) const override {
+    std::vector<TicTacToeAction> actions = board->GetAvailableActions(mark);
     if(actions.size() > 0) {
       return actions[0];
     }
@@ -192,11 +192,10 @@ class PickFirstActionAgent : TicTacToeAgent {
   }
 };
 
-class PickRandomActionAgent : TicTacToeAgent {
+class PickRandomActionAgent : public TicTacToeAgent {
   public:
-  PickRandomActionAgent(TicTacToeBoard* game, char which_player) : TicTacToeAgent(game, which_player) { }
-  virtual TicTacToeAction GetAction() const override {
-    std::vector<TicTacToeAction> actions = game_->GetAvailableActions(which_player_);
+  virtual TicTacToeAction GetAction(TicTacToeBoard* board, char mark) const override {
+    std::vector<TicTacToeAction> actions = board->GetAvailableActions(mark);
     if(actions.size() > 0) {
       return actions[rand()%actions.size()];
     }
@@ -204,39 +203,71 @@ class PickRandomActionAgent : TicTacToeAgent {
   }
 };
 
+template <class Agent1, class Agent2>
+class TicTacToeGame {
+public:
+  TicTacToeGame() : x_player(new Agent1()), o_player(new Agent2()) { 
+    Reset();
+  }
+
+  GameStatus Play() {
+    Reset();
+    while(true) {
+     TakeTurn();
+     if(game_board.GameOver()) {
+       return game_board.GetGameStatus();
+     }
+    }
+  }
+
+  void TakeTurn() {
+    !(turn_count & 1) ? x_player->TakeAction(&game_board, 'x') : o_player->TakeAction(&game_board, 'o');
+    x_turn = !x_turn;
+    turn_count++;
+  }
+
+  void Reset() {
+    game_board.Reset();
+    turn_count = 0;
+  }
+
+private:
+  std::unique_ptr<TicTacToeAgent> x_player;
+  std::unique_ptr<TicTacToeAgent> o_player;
+  bool x_turn;
+  int turn_count;
+  TicTacToeBoard game_board;
+};
+
 int main(int argc, char* argv[])  {
-  TicTacToeBoard game;
   srand(time(0));
-  auto x_player = std::make_shared<PickRandomActionAgent>(&game, 'x');
-  auto o_player = std::make_shared<PickRandomActionAgent>(&game, 'o');
   using namespace std::chrono;
 
-  high_resolution_clock::time_point t1 = high_resolution_clock::now();
+  TicTacToeGame<PickRandomActionAgent, PickRandomActionAgent> game;
+
   int x_wins=0, o_wins=0, draws=0;
   int num_games = 1e6;
-
-  std::set<std::string> game_states;
   
+  high_resolution_clock::time_point t1 = high_resolution_clock::now();
   for(int x = 0; x < num_games; x++) {
-    game.Reset();
-    while(true) {
-      game.ApplyAction(x_player->GetAction());
-      if(game.GameOver()) break;
-      game.ApplyAction(o_player->GetAction());
-      if(game.GameOver()) break;
+    GameStatus status = game.Play();
+    switch(status){
+      case GameStatus::X_WINS:
+        x_wins++;
+        break;
+      case GameStatus::O_WINS:
+        o_wins++;
+        break;
+      case GameStatus::DRAW:
+        draws++;
+        break;
     }
-    game_states.insert(game.GetStateString());
-  }
- 
+  } 
   high_resolution_clock::time_point t2 = high_resolution_clock::now();
   duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
 
-  //for(auto const& state : game_states) std::cout << state << std::endl;
   std::cout << "Played " << num_games/time_span.count() << " games per second." << std::endl;
   std::cout << "x_wins: " << x_wins/(float)num_games*100 << std::endl;
   std::cout << "o_wins: " << o_wins/(float)num_games*100 << std::endl;
   std::cout << "draws: " << draws/(float)num_games*100 << std::endl;
-   
-  std::cout << game_states.size() << std::endl;
-  
 }
