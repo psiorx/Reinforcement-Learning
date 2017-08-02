@@ -302,14 +302,15 @@ typename Game::Action GetAction(const Game& state) {
     state_after_last_move = state.GetStateString();
   }
 
-  if(state.GameOver() && !state.Draw()) {
+  typename Game::Action action;
+  if(state.GameOver()) {
      std::string state_string = state.GetStateString();
      float Vs = value_function[state_after_last_move];
      value_function[state_after_last_move] = Vs - alpha * Vs;
+     return action;
   }
   auto actions = state.GetAvailableActions();
 
-  typename Game::Action action;
   float random = static_cast <float> (rand()) / static_cast <float> (RAND_MAX); 
   if(random < epsilon) {
     action = *select_randomly(actions.begin(), actions.end());
@@ -348,7 +349,7 @@ int main(int argc, char* argv[])  {
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 100000;
   
-    GameSession<TicTacToe, TemporalDifferenceAgent, PickRandomActionAgent> session;
+    GameSession<TicTacToe,  PickRandomActionAgent, TemporalDifferenceAgent> session;
 
     session.PlayN(100000);
     high_resolution_clock::time_point t1 = high_resolution_clock::now();
