@@ -285,27 +285,23 @@ public:
     }
   };
 
-  struct TreeNode {
-    std::shared_ptr<Game> state;
-    GameResults game_results;
-    std::unordered_map<typename Game::Action, std::shared_ptr<TreeNode>> child_map;
-  };
-
   typename Game::Action GetAction(const Game& state) {
+    if(game_tree.size() == 0) {
+      using namespace std::chrono;
+      high_resolution_clock::time_point t1 = high_resolution_clock::now();
+      TreeSearch(state, true);
+      high_resolution_clock::time_point t2 = high_resolution_clock::now();
+      duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+      std::cout << "Building full game tree took " << time_span.count()*1000 << " ms." << std::endl;
+    }
+
     typename Game::Action best_action;
     double best_proportion = 0;
     for(auto const& action : state.GetAvailableActions()) {      
-      GameResults results;
-      using namespace std::chrono;
-      high_resolution_clock::time_point t1 = high_resolution_clock::now();
-      
+      GameResults results; 
       Game result_of_action = state.ForwardModel(action);
-      if(result_of_action.GameOver() && !result_of_action.Draw()) return action;
-      results = TreeSearch(result_of_action, true);
-      high_resolution_clock::time_point t2 = high_resolution_clock::now();
-      duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+      results = game_tree[result_of_action.GetStateString()];
       double proportion_of_wins = results.wins / (double)(results.wins + results.losses + results.draws);
-
       if(proportion_of_wins > best_proportion) {
         best_proportion = proportion_of_wins;
         best_action = action;
@@ -318,14 +314,18 @@ public:
       GameResults results = {0, 0, 0};
       for(auto const& action : state.GetAvailableActions()) {
         Game result_of_action = state.ForwardModel(action);
+        std::string state_string = result_of_action.GetStateString();
         if(result_of_action.GameOver()) { //action results in a terminal state
           if(!result_of_action.Draw()) { //its a win on our turn, loss otherwise
             if(our_turn) {
+              game_tree[state_string] = {1, 0, 0};
               results.wins++;
             } else {
+              game_tree[state_string] = {0, 1, 0};
               results.losses++;
             }
           } else { //its a draw
+            game_tree[state_string] = {0, 0, 1};
             results.draws++;
           }
         } else {
@@ -335,9 +335,10 @@ public:
           results.draws += child_results.draws;
         }
       }
+    game_tree[state.GetStateString()] = results;
     return results;
     }
-    std::unordered_map<std::string, std::shared_ptr<TreeNode>> game_tree;
+    std::unordered_map<std::string, GameResults> game_tree;
     void Reset() { }
 };
 
@@ -419,7 +420,7 @@ private:
 int main(int argc, char* argv[])  {
     using namespace std::chrono;
     int x_wins=0, o_wins=0, draws=0;
-    int num_games = 100; 
+    int num_games = 1e6; 
     //TicTacToe game;
     //TreeSearchAgent<TicTacToe> tree_search_agent;
     //tree_search_agent.GetAction(game);
