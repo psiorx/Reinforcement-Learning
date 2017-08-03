@@ -280,8 +280,8 @@ public:
     int wins, losses, draws;
     void print() {
       std::cout << "Wins: " << wins << std::endl;
-      std::cout << "Losses: " << wins << std::endl;
-      std::cout << "Draws: " << wins << std::endl;
+      std::cout << "Losses: " << losses << std::endl;
+      std::cout << "Draws: " << draws << std::endl;
     }
   };
 
@@ -289,7 +289,7 @@ public:
     if(game_tree.size() == 0) {
       using namespace std::chrono;
       high_resolution_clock::time_point t1 = high_resolution_clock::now();
-      TreeSearch(state, true);
+      TreeSearch(state, true).print();
       high_resolution_clock::time_point t2 = high_resolution_clock::now();
       duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
       std::cout << "Building full game tree took " << time_span.count()*1000 << " ms." << std::endl;
@@ -302,7 +302,7 @@ public:
       Game result_of_action = state.ForwardModel(action);
       results = game_tree[result_of_action.GetStateString()];
       double proportion_of_wins = results.wins / (double)(results.wins + results.losses + results.draws);
-      if(proportion_of_wins > best_proportion) {
+      if(proportion_of_wins >= best_proportion) {
         best_proportion = proportion_of_wins;
         best_action = action;
       }
@@ -347,7 +347,7 @@ template <class Game>
 class TemporalDifferenceAgent {
 public:
 
-    typename Game::Action Policy(const Game& state) {
+    typename Game::Action GreedyAction(const Game& state) {
         float best_value = 0;
         typename Game::Action best_action;
         std::string state_string;
@@ -385,9 +385,9 @@ public:
         if(random < epsilon) {
             action = *select_randomly(actions.begin(), actions.end());
         } else {
-            action = Policy(state);
+            action = GreedyAction(state);
         }
-        //handle exploratory actions
+        
         return action;
     }
 
@@ -420,7 +420,7 @@ private:
 int main(int argc, char* argv[])  {
     using namespace std::chrono;
     int x_wins=0, o_wins=0, draws=0;
-    int num_games = 1e6; 
+    int num_games = 10000; 
     //TicTacToe game;
     //TreeSearchAgent<TicTacToe> tree_search_agent;
     //tree_search_agent.GetAction(game);
