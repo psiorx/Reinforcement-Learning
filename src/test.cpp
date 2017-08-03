@@ -276,21 +276,35 @@ public:
 template <class Game>
 class TreeSearchAgent {
 public:
-  
+  struct GameResults {
+    int wins, losses, draws;
+    void print() {
+      std::cout << "Wins: " << wins << std::endl;
+      std::cout << "Losses: " << wins << std::endl;
+      std::cout << "Draws: " << wins << std::endl;
+    }
+  };
+
+  struct TreeNode {
+    std::shared_ptr<Game> state;
+    GameResults game_results;
+    std::unordered_map<typename Game::Action, std::shared_ptr<TreeNode>> child_map;
+  };
+
   typename Game::Action GetAction(const Game& state) {
     typename Game::Action best_action;
     double best_proportion = 0;
     for(auto const& action : state.GetAvailableActions()) {      
-      int wins=0, losses=0, draws=0;
+      GameResults results;
       using namespace std::chrono;
       high_resolution_clock::time_point t1 = high_resolution_clock::now();
       
       Game result_of_action = state.ForwardModel(action);
       if(result_of_action.GameOver() && !result_of_action.Draw()) return action;
-      TreeSearch(result_of_action, wins, losses, draws, true);
+      results = TreeSearch(result_of_action, true);
       high_resolution_clock::time_point t2 = high_resolution_clock::now();
       duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
-      double proportion_of_wins = wins / (double)(wins + losses + draws);
+      double proportion_of_wins = results.wins / (double)(results.wins + results.losses + results.draws);
 
       if(proportion_of_wins > best_proportion) {
         best_proportion = proportion_of_wins;
@@ -299,26 +313,31 @@ public:
     }
     return best_action;
   }
-    static void TreeSearch(const Game& state, int& win_count, int& loss_count, int& draw_count, bool our_turn) { 
+  
+  GameResults TreeSearch(const Game& state, bool our_turn) { 
+      GameResults results = {0, 0, 0};
       for(auto const& action : state.GetAvailableActions()) {
         Game result_of_action = state.ForwardModel(action);
         if(result_of_action.GameOver()) { //action results in a terminal state
           if(!result_of_action.Draw()) { //its a win on our turn, loss otherwise
             if(our_turn) {
-              win_count++;
+              results.wins++;
             } else {
-              loss_count++;
+              results.losses++;
             }
           } else { //its a draw
-            draw_count++;
+            results.draws++;
           }
         } else {
-          TreeSearch(result_of_action, win_count, loss_count, draw_count, !our_turn);
+          GameResults child_results = TreeSearch(result_of_action, !our_turn);
+          results.wins += child_results.wins;
+          results.losses += child_results.losses;
+          results.draws += child_results.draws;
         }
       }
-
+    return results;
     }
-
+    std::unordered_map<std::string, std::shared_ptr<TreeNode>> game_tree;
     void Reset() { }
 };
 
@@ -327,7 +346,7 @@ template <class Game>
 class TemporalDifferenceAgent {
 public:
 
-    typename Game::Action GetBestAction(const Game& state) {
+    typename Game::Action Policy(const Game& state) {
         float best_value = 0;
         typename Game::Action best_action;
         std::string state_string;
@@ -365,7 +384,7 @@ public:
         if(random < epsilon) {
             action = *select_randomly(actions.begin(), actions.end());
         } else {
-            action = GetBestAction(state);
+            action = Policy(state);
         }
         //handle exploratory actions
         return action;
