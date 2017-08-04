@@ -76,6 +76,9 @@ public:
 
     std::vector<TicTacToeAction> GetAvailableActions() const {
         std::vector<TicTacToeAction> actions;
+        if(GameOver()) {
+          return actions;
+        }
         for(int row_index = 0; row_index < size; row_index++) {
             for(int column_index = 0; column_index < size; column_index++) {
                 if(board_state_(row_index, column_index) == '-') {
@@ -210,7 +213,8 @@ public:
                 player2.GetAction(game);
                 break;
             }
-            game.ApplyAction(player2.GetAction(game));
+            auto test = player2.GetAction(game);
+            game.ApplyAction(test);
             if(game.GameOver()) {
                 player1.GetAction(game);
                 break;
@@ -286,7 +290,7 @@ public:
   };
 
   typename Game::Action GetAction(const Game& state) {
-    if(game_tree.size() == 0) {
+    if(game_tree.size() == 0 || game_tree.find(state.GetStateString()) == game_tree.end() ) {
       using namespace std::chrono;
       high_resolution_clock::time_point t1 = high_resolution_clock::now();
       TreeSearch(state, true).print();
@@ -296,7 +300,7 @@ public:
     }
 
     typename Game::Action best_action;
-    double best_proportion = 0;
+    double best_proportion = -1;
     for(auto const& action : state.GetAvailableActions()) {      
       GameResults results; 
       Game result_of_action = state.ForwardModel(action);
@@ -425,7 +429,7 @@ int main(int argc, char* argv[])  {
     //TreeSearchAgent<TicTacToe> tree_search_agent;
     //tree_search_agent.GetAction(game);
 
-    GameSession<TicTacToe, TreeSearchAgent, TemporalDifferenceAgent> session;
+    GameSession<TicTacToe, TreeSearchAgent,  TreeSearchAgent> session;
     high_resolution_clock::time_point t1 = high_resolution_clock::now();
     for(int i = 0; i < num_games ; i++) {
         switch(session.PlayOnce()) {
