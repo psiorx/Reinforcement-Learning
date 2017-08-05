@@ -276,7 +276,6 @@ public:
     void Reset() { }
 };
 
-
 template <class Game>
 class TreeSearchAgent {
 public:
@@ -291,6 +290,7 @@ public:
 
   typename Game::Action GetAction(const Game& state) {
     if(game_tree.size() == 0 || game_tree.find(state.GetStateString()) == game_tree.end() ) {
+      //MiniMax(state, true);
       using namespace std::chrono;
       high_resolution_clock::time_point t1 = high_resolution_clock::now();
       TreeSearch(state, true).print();
@@ -300,20 +300,61 @@ public:
     }
 
     typename Game::Action best_action;
-    double best_proportion = -1;
+    double best_score = -10;
     for(auto const& action : state.GetAvailableActions()) {      
-      GameResults results; 
+       
       Game result_of_action = state.ForwardModel(action);
-      results = game_tree[result_of_action.GetStateString()];
-      double proportion_of_wins = results.wins / (double)(results.wins + results.losses + results.draws);
-      if(proportion_of_wins >= best_proportion) {
-        best_proportion = proportion_of_wins;
+      std::string state_string = result_of_action.GetStateString();
+      double score =  MiniMax(result_of_action, false);// minimax_tree[state_string];
+      std::cout << "Minimax score for state " << state_string << ": " << score << std::endl;
+      if(score >= best_score) {
+        best_score = score;
         best_action = action;
       }
     }
     return best_action;
   }
-  
+
+  double MiniMax(const Game& state, bool maximizing_player) {
+   //std::cout << "maximizing_player: " << maximizing_player << std::endl;
+   //std::cout << state.GetBoardState() << std::endl; 
+   if(state.GameOver()) {
+      if(state.Draw()) {
+        //minimax_tree[state.GetStateString()] = 0;
+        return 0;
+      }
+      if(!maximizing_player) {
+        //std::cout << "winning state: " << std::endl;
+        //std::cout << state.GetBoardState() << std::endl;
+        //minimax_tree[state.GetStateString()] = -1;
+        return 1;
+      } else {
+        //std::cout << "losing state: " << std::endl;
+        //std::cout << state.GetBoardState() << std::endl;
+        //minimax_tree[state.GetStateString()] = 1;
+        return -1;
+      } 
+    }
+
+    if(maximizing_player) {
+      double best_value = -10;
+      for(auto const& action : state.GetAvailableActions()) {
+        Game result_of_action = state.ForwardModel(action);
+        best_value = std::max(best_value, MiniMax(result_of_action, false));
+      }
+      //minimax_tree[state.GetStateString()] = best_value;
+      return best_value;
+    } else {
+      double best_value = 10;
+      for(auto const& action : state.GetAvailableActions()) {
+        Game result_of_action = state.ForwardModel(action);
+        best_value = std::min(best_value, MiniMax(result_of_action, true));
+      }
+      //minimax_tree[state.GetStateString()] = best_value;
+      return best_value;
+    }
+  }
+
   GameResults TreeSearch(const Game& state, bool our_turn) { 
       GameResults results = {0, 0, 0};
       for(auto const& action : state.GetAvailableActions()) {
@@ -343,6 +384,7 @@ public:
     return results;
     }
     std::unordered_map<std::string, GameResults> game_tree;
+    std::unordered_map<std::string, double> minimax_tree;
     void Reset() { }
 };
 
@@ -424,12 +466,9 @@ private:
 int main(int argc, char* argv[])  {
     using namespace std::chrono;
     int x_wins=0, o_wins=0, draws=0;
-    int num_games = 10000; 
-    //TicTacToe game;
-    //TreeSearchAgent<TicTacToe> tree_search_agent;
-    //tree_search_agent.GetAction(game);
+    int num_games = 1000; 
 
-    GameSession<TicTacToe, TreeSearchAgent,  TreeSearchAgent> session;
+    GameSession<TicTacToe, TreeSearchAgent, PickRandomActionAgent> session;
     high_resolution_clock::time_point t1 = high_resolution_clock::now();
     for(int i = 0; i < num_games ; i++) {
         switch(session.PlayOnce()) {
