@@ -1,3 +1,5 @@
+#include <iostream> 
+
 #include "GameSession.h"
 #include "TicTacToe.h"
 #include "PickRandomActionAgent.h"
@@ -6,11 +8,10 @@
 #include "Stopwatch.h"
 
 int main(int argc, char* argv[])  {
-    using namespace std::chrono;
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 10000;
 
-    GameSession<TicTacToe, MinimaxAgent, MinimaxAgent> session;
+    GameSession<TicTacToe, TemporalDifferenceAgent, TemporalDifferenceAgent> session;
     Stopwatch sw;
 
     sw.Start();

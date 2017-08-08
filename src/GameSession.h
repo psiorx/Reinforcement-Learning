@@ -4,6 +4,11 @@
 template <class Game, template <class Game> class Agent1, template <class Game> class Agent2>
 class GameSession {
 public:
+    GameSession(Game game = Game(), 
+                Agent1<Game> agent1 = Agent1<Game>(), 
+                Agent2<Game> agent2 = Agent2<Game>()) 
+    : game(game), player1(agent1), player2(agent2) { }
+
     typename Game::Status PlayOnce() {
         while(true) {
             game.ApplyAction(player1.GetAction(game));

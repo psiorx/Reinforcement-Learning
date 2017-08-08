@@ -1,21 +1,13 @@
 #pragma once
 
-#include <iostream>
 #include <unordered_map>
-
-#include "Stopwatch.h"
 
 template <class Game>
 class MinimaxAgent {
-public:
+public: 
   typename Game::Action GetAction(const Game& state) {
     if(minimax_tree.find(state.GetStateString()) == minimax_tree.end()) {
-      Stopwatch sw;
-      sw.Start();
       MiniMax(state, true);
-      sw.Stop();
-      std::cout << "Building full game tree took " << sw.ElapsedMillis() << " ms." << std::endl;
-      std::cout << "Nodes after tree expansion:" << minimax_tree.size() << std::endl;
     }
 
     typename Game::Action best_action;
