@@ -4,11 +4,11 @@ template <class Game>
 class TemporalDifferenceAgent {
 public:
 
-    typename Game::Action GreedyAction(const Game& state) {
+    typename Game::Action GreedyAction(const Game& state, const std::vector<typename Game::Action>& actions) {
         float best_value = 0;
         typename Game::Action best_action;
         std::string state_string;
-        for(auto const& action : state.GetAvailableActions()) {
+        for(auto const& action : actions) {
             Game next_state = state.ForwardModel(action);
             float state_value = GetValue(next_state);
             if(state_value > best_value) {
@@ -42,7 +42,7 @@ public:
         if(random < epsilon) {
             action = *select_randomly(actions.begin(), actions.end());
         } else {
-            action = GreedyAction(state);
+            action = GreedyAction(state, actions);
         }
         
         return action;

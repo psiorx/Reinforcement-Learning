@@ -11,7 +11,8 @@ int main(int argc, char* argv[])  {
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 10000;
 
-    GameSession<TicTacToe, TemporalDifferenceAgent, TemporalDifferenceAgent> session;
+    GameSession<TicTacToe, TemporalDifferenceAgent, MinimaxAgent> session;
+
     Stopwatch sw;
 
     sw.Start();
@@ -31,8 +32,19 @@ int main(int argc, char* argv[])  {
     }
     sw.Stop();
 
-    std::cout << "Played " << num_games/sw.ElapsedMillis()*1000 << " games per second." << std::endl;
-    std::cout << "x_wins: " << x_wins/(float)num_games*100 << std::endl;
-    std::cout << "o_wins: " << o_wins/(float)num_games*100 << std::endl;
-    std::cout << "draws: " << draws/(float)num_games*100 << std::endl;
+    std::cout << "Played " 
+    << num_games/sw.ElapsedMillis()*1000 
+    << " games per second." << std::endl;
+
+    std::cout << "x_wins: " 
+    << x_wins/(float)num_games*100 
+    << std::endl;
+
+    std::cout << "o_wins: " 
+    << o_wins/(float)num_games*100 
+    << std::endl;
+
+    std::cout << "draws: " 
+    << draws/(float)num_games*100 
+    << std::endl;
 }

@@ -42,7 +42,13 @@ public:
     using Status = TicTacToeStatus;
     using BoardStateType = Eigen::Matrix<char, 3, 3>;
 
-    //TODO: implement TicTacToe(string state) ... initialize x_turn based on num_x-num_o
+    TicTacToe(std::string const& state) {
+        size_t num_x = std::count(state.begin(), state.end(), 'x');
+        size_t num_o = std::count(state.begin(), state.end(), 'o');
+        x_turn = !(num_x == num_o + 1);
+        memcpy(board_state_.data(), state.c_str(), 9);
+        game_status_ = UpdateTicTacToeStatus();
+    }
 
     TicTacToe() {
         Reset();
