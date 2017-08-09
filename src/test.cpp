@@ -5,14 +5,20 @@
 #include "PickRandomActionAgent.h"
 #include "MinimaxAgent.h"
 #include "TemporalDifferenceAgent.h"
+#include "MonteCarloTreeSearchAgent.h"
 #include "Stopwatch.h"
 
 int main(int argc, char* argv[])  {
+    std::srand ( unsigned ( std::time(0) ) );
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 10000;
 
     GameSession<TicTacToe, TemporalDifferenceAgent, MinimaxAgent> session;
 
+    TicTacToe test;
+    MonteCarloTreeSearchAgent<TicTacToe> agent;
+    agent.GetAction(test);
+    exit(0);
     Stopwatch sw;
 
     sw.Start();
