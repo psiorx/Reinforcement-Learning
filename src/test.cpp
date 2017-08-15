@@ -11,25 +11,11 @@
 
 int main(int argc, char* argv[])  {
     std::srand ( unsigned ( std::time(0) ) );
-    //std::srand (123);
     
     int x_wins=0, o_wins=0, draws=0;
-    int num_games = 1;
+    int num_games = 100;
 
-    // TestGame game;
-    // MonteCarloTreeSearchAgent<TestGame> test;
-    // test.GetAction(game);
-    // exit(0);
-
-    // GameSession<TestGame, MonteCarloTreeSearchAgent, PickRandomActionAgent> session;
-    // auto status = session.PlayOnce();
-    // if(status == TestGameStatus::WIN) {
-    //     std::cout << "We won" << std::endl;
-    // } else {
-    //     std::cout << "We lost" << std::endl;
-    // }
-
-    GameSession<TicTacToe, MonteCarloTreeSearchAgent, PickRandomActionAgent> session;
+    GameSession<TicTacToe, MonteCarloTreeSearchAgent, MinimaxAgent> session;
 
     Stopwatch sw;
 
