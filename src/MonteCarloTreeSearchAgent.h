@@ -37,7 +37,7 @@ struct TreeNode {
     if(!parent) {
       return win_percentage;
     }
-    double confidence_bound = sqrt(2*log(parent->stats.plays) / stats.plays);
+    double confidence_bound = sqrt(2 * log(parent->stats.plays * 1.0) / stats.plays);
     //std::cout << "UCB: " << state.GetStateString() << " " << win_percentage << " +/- " << confidence_bound << std::endl;
     return win_percentage + confidence_bound; 
   }
@@ -59,14 +59,15 @@ public:
   typename Game::Action GetAction(const Game& state) {
    search_tree = std::make_shared<TreeNode<Game>>(state, true, nullptr, typename Game::Action());
    //SearchForTime(100.0);
-   SearchForIterations(20);
+   
+   SearchForIterations(1000);
 
-   int best_value = 100;
+   int best_value = 0;
    typename Game::Action best_action;
    for(auto const& child : search_tree->children) {
-     double value = child->WinRatio();
+     double value = child->stats.plays;
      std::cout << child->state.GetStateString() << " : " << value << std::endl; 
-     if(value <= best_value) {
+     if(value >= best_value) {
        best_value = value;
        best_action = child->action;
      }
@@ -113,6 +114,10 @@ public:
     TreeNodePtr best_child = nullptr;
     for(auto const& child : node->children) {
       double ucb = child->UpperConfidenceBound();
+      std::cout << "Confidence bound: " 
+      << ucb << " for state " << child->state.GetBoardState() 
+      << "(" << child->stats.wins << "/" 
+      << child->stats.plays << ")" << std::endl;
       if(ucb > best_value) {
         best_value = ucb;
         best_child = child;
@@ -130,11 +135,9 @@ public:
   }
 
   TreeNodePtr Expansion(TreeNodePtr node) {
-
     auto action = node->unexplored_actions.back();
     node->unexplored_actions.pop_back();
-    std::cout << "Expanding action " << (int)action << " from state " << node->state.GetStateString() << std::endl;
-    
+    //std::cout << "Expanding action " << (int)action << " from state " << node->state.GetStateString() << std::endl;
     Game next_state = node->state.ForwardModel(action);
     auto child_node = std::make_shared<TreeNode<Game>>(next_state, !node->our_turn, node, action);
     node->children.push_back(child_node);
@@ -202,7 +205,7 @@ public:
     if(node->our_turn && score > 0) {
       node->stats.wins++;
     } else if(!node->our_turn && score < 0) {
-      node->stats.wins++;
+      node->stats.wins--;
     }
 
     std::cout << "New score for state " << node->state.GetStateString() << ": " << node->stats.wins << "/" << node->stats.plays << " (" << node->UpperConfidenceBound() << ")" << std::endl;
