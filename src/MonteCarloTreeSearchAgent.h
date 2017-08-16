@@ -13,16 +13,15 @@ struct GameStats {
 
 template <class Game>
 struct TreeNode {
+  using TreeNodePtr = TreeNode<Game>*;
+  
   TreeNode(Game const& game, 
            bool our_turn, 
-           std::shared_ptr<TreeNode<Game>> parent,
+           TreeNodePtr parent,
            typename Game::Action action)
     : stats({0, 0}), state(game), our_turn(our_turn), parent(parent), action(action) { 
         unexplored_actions = state.GetAvailableActions();
         std::random_shuffle(unexplored_actions.begin(), unexplored_actions.end());
-
-        if(parent) {
-        }
   }
 
   double WinRatio() const {
@@ -43,21 +42,23 @@ struct TreeNode {
   Game state;
   bool our_turn;
   typename Game::Action action;
-  std::vector<std::shared_ptr<TreeNode<Game>>> children;
+  std::vector<TreeNodePtr> children;
   std::vector<typename Game::Action> unexplored_actions;
-  std::shared_ptr<TreeNode<Game>> parent;
+  TreeNodePtr parent;
 };
 
 template <class Game>
 class MonteCarloTreeSearchAgent {
-public:
-  using TreeNodePtr = std::shared_ptr<TreeNode<Game>>;
-  
+public:  
+  using TreeNodePtr = TreeNode<Game>*;
   typename Game::Action GetAction(const Game& state) {
-   search_tree = std::make_shared<TreeNode<Game>>(state, true, nullptr, typename Game::Action());
+   auto root_node = std::unique_ptr<TreeNode<Game>>(new TreeNode<Game>(state, true, nullptr, typename Game::Action()));
+   search_tree = root_node.get();
+   nodes.clear();
+   nodes.push_back(std::move(root_node));
+
    //SearchForTime(100.0);
-   
-   SearchForIterations(10000);
+   SearchForIterations(100);
 
    int best_value = 0;
    typename Game::Action best_action;
@@ -125,25 +126,24 @@ public:
     auto action = node->unexplored_actions.back();
     node->unexplored_actions.pop_back();
     Game next_state = node->state.ForwardModel(action);
-    auto child_node = std::make_shared<TreeNode<Game>>(next_state, !node->our_turn, node, action);
-    node->children.push_back(child_node);
-    return child_node;
+    
+    auto child_node = std::unique_ptr<TreeNode<Game>>(new TreeNode<Game>(next_state, !node->our_turn, node, action));
+    node->children.push_back(child_node.get());
+    nodes.push_back(std::move(child_node));
+    return node->children.back();
   }
 
   int Simulation(TreeNodePtr node) {
     Game simulated_game = node->state;
     bool our_turn = node->our_turn;
     
-
     while(!simulated_game.GameOver()) {
       auto actions = simulated_game.GetAvailableActions();
       simulated_game.ApplyAction(*select_randomly(actions.begin(), actions.end()));
       our_turn = !our_turn;
     }
-     
 
     int score;
-    
     if(simulated_game.Draw()) {
       score = 0;
     } else if(our_turn) {
@@ -151,7 +151,6 @@ public:
     } else {
       score = 1;
     }
-
     return score;
   }
 
@@ -184,6 +183,7 @@ public:
 
   GameStats MonteCarloTreeSearch(TreeNodePtr node) {
     TreeNodePtr unexpanded_child = Selection(node);
+
     if(unexpanded_child) {
       TreeNodePtr expanded_node = Expansion(unexpanded_child);
       double reward = Simulation(expanded_node);
@@ -194,6 +194,6 @@ public:
   void Reset() { }
 
 private:
+  std::vector<std::unique_ptr<TreeNode<Game>> > nodes;
   TreeNodePtr search_tree;
-  std::unordered_map<std::string, TreeNodePtr> node_map;
 };

@@ -15,7 +15,8 @@ int main(int argc, char* argv[])  {
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 100;
 
-    GameSession<TicTacToe, MonteCarloTreeSearchAgent, MinimaxAgent> session;
+    GameSession<TicTacToe, 
+    MonteCarloTreeSearchAgent, MinimaxAgent> session;
 
     Stopwatch sw;
 
