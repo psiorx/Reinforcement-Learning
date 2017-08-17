@@ -4,7 +4,8 @@
 template <class Game, template <class Game> class Agent1, template <class Game> class Agent2>
 class GameSession {
 public:
-    GameSession() { }
+    GameSession(Game &game, Agent1<Game>& agent1, Agent2<Game> &agent2)
+    : game(game), player1(agent1), player2(agent2) { }
 
     typename Game::Status PlayOnce() {
         while(true) {
@@ -48,7 +49,7 @@ public:
     }
 
 private:
-    Game game;
-    Agent1<Game> player1;
-    Agent2<Game> player2;
+    Game& game;
+    Agent1<Game>& player1;
+    Agent2<Game>& player2;
 };

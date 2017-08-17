@@ -48,13 +48,21 @@ public:
         return action;
     }
 
+    void SetLearningRate(float alpha) {
+        this->alpha = alpha;
+    }
+
+    void SetExplorationRate(float epsilon) {
+        this->epsilon = epsilon;
+    }
+
     void Reset() {
         state_after_last_move = "";
     }
 
 private:
     float GetValue(const Game& state) {
-        if(state.GameOver() && !state.Draw()) {
+        if(state.GameOver() /*&& !state.Draw()*/) {
             return 1.0f;
         }
         std::string state_string = state.GetStateString();
@@ -65,8 +73,8 @@ private:
     }
 
 
-    const float alpha = 0.05; //learning rate
-    const float epsilon = 0.05; //exploration rate
+    float alpha = 0.05; //learning rate
+    float epsilon = 0.05; //exploration rate
     std::string state_after_last_move;
     std::unordered_map<std::string, float> value_function;
 };
