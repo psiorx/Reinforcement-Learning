@@ -18,8 +18,14 @@ struct TreeNode {
   TreeNode(Game const& game, 
            bool our_turn, 
            TreeNodePtr parent,
-           typename Game::Action action)
-    : stats({0, 0}), state(game), our_turn(our_turn), parent(parent), action(action) { 
+           typename Game::Action action,
+           float exploration_rate)
+    : stats({0, 0}), 
+      state(game), 
+      our_turn(our_turn), 
+      parent(parent), 
+      action(action), 
+      exploration_rate(exploration_rate) { 
         unexplored_actions = state.GetAvailableActions();
         std::random_shuffle(unexplored_actions.begin(), unexplored_actions.end());
   }
@@ -34,7 +40,7 @@ struct TreeNode {
     if(!parent) {
       return win_percentage;
     }
-    double confidence_bound = sqrt(2 * log(parent->stats.plays * 1.0) / stats.plays);
+    double confidence_bound = sqrt(exploration_rate * log(parent->stats.plays * 1.0) / stats.plays);
     return win_percentage + confidence_bound; 
   }
 
@@ -42,6 +48,7 @@ struct TreeNode {
   Game state;
   bool our_turn;
   typename Game::Action action;
+  float exploration_rate;
   std::vector<TreeNodePtr> children;
   std::vector<typename Game::Action> unexplored_actions;
   TreeNodePtr parent;
@@ -49,16 +56,17 @@ struct TreeNode {
 
 template <class Game>
 class MonteCarloTreeSearchAgent {
-public:  
+public:
+  MonteCarloTreeSearchAgent() : exploration_rate(2), iteration_limit(100) { }  
   using TreeNodePtr = TreeNode<Game>*;
+
   typename Game::Action GetAction(const Game& state) {
-   auto root_node = std::unique_ptr<TreeNode<Game>>(new TreeNode<Game>(state, true, nullptr, typename Game::Action()));
+   auto root_node = std::unique_ptr<TreeNode<Game>>(new TreeNode<Game>(state, true, nullptr, typename Game::Action(), exploration_rate));
    search_tree = root_node.get();
    nodes.clear();
    nodes.push_back(std::move(root_node));
 
-   //SearchForTime(100.0);
-   SearchForIterations(100);
+   SearchForIterations(iteration_limit);
 
    int best_value = 0;
    typename Game::Action best_action;
@@ -73,6 +81,17 @@ public:
    return best_action;
   }
 
+  void Reset() { }
+
+  void SetIterationLimit(size_t iterations) {
+    iteration_limit = iterations;
+  }
+
+  void SetExplorationRate(float rate) {
+    exploration_rate = rate;
+  }
+
+private:
   void SearchForTime(double ms) {
    const int batch_size = 1000;
    Stopwatch sw;
@@ -127,7 +146,7 @@ public:
     node->unexplored_actions.pop_back();
     Game next_state = node->state.ForwardModel(action);
     
-    auto child_node = std::unique_ptr<TreeNode<Game>>(new TreeNode<Game>(next_state, !node->our_turn, node, action));
+    auto child_node = std::unique_ptr<TreeNode<Game>>(new TreeNode<Game>(next_state, !node->our_turn, node, action, exploration_rate));
     node->children.push_back(child_node.get());
     nodes.push_back(std::move(child_node));
     return node->children.back();
@@ -181,7 +200,7 @@ public:
     }
   }
 
-  GameStats MonteCarloTreeSearch(TreeNodePtr node) {
+  void MonteCarloTreeSearch(TreeNodePtr node) {
     TreeNodePtr unexpanded_child = Selection(node);
 
     if(unexpanded_child) {
@@ -191,9 +210,8 @@ public:
     } 
   }
 
-  void Reset() { }
-
-private:
+  size_t iteration_limit;
+  float exploration_rate;
   std::vector<std::unique_ptr<TreeNode<Game>> > nodes;
   TreeNodePtr search_tree;
 };
