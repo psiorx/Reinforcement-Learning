@@ -68,9 +68,11 @@ public:
 
    SearchForIterations(iteration_limit);
 
-   int best_value = 0;
+   double best_value = -10;
    typename Game::Action best_action;
    for(auto const& child : search_tree->children) {
+     //std::cout << child->stats.wins << "/" << child->stats.plays << std::endl;
+     //double value = child->WinRatio();
      double value = child->stats.plays;
      if(value >= best_value) {
        best_value = value;
@@ -142,6 +144,11 @@ private:
   }
 
   TreeNodePtr Expansion(TreeNodePtr node) {
+    
+    if(node->state.GameOver()) {
+      std::cout << "Tried to expand a terminal state" << std::endl;
+    }
+
     auto action = node->unexplored_actions.back();
     node->unexplored_actions.pop_back();
     Game next_state = node->state.ForwardModel(action);
@@ -165,10 +172,10 @@ private:
     int score;
     if(simulated_game.Draw()) {
       score = 0;
-    } else if(our_turn) {
-      score = -1;
-    } else {
+    } else if(our_turn == node->our_turn) {
       score = 1;
+    } else {
+      score = -1;
     }
     return score;
   }
@@ -177,26 +184,17 @@ private:
     int score;
     if(node->state.Draw()) {
       score = 0;
-    } else if(node->our_turn) {
-      score = -1; 
     } else {
       score = 1;
     }
-
     return score;
   }
 
   void Backpropagation(TreeNodePtr node, int score) {
-
     node->stats.plays++;
-    if(node->our_turn && score > 0) {
-      node->stats.wins++;
-    } else if(!node->our_turn && score < 0) {
-      node->stats.wins--;
-    }
-
+    node->stats.wins += score;
     if(node->parent) {
-      Backpropagation(node->parent, score);
+      Backpropagation(node->parent, -score);
     }
   }
 
