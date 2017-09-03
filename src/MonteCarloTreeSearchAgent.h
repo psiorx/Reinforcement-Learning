@@ -136,6 +136,8 @@ private:
     }
     
     if(!best_child) {
+
+     //std::cout <<  "Backprop leaf node: " << node->WinRatio() << std::endl;
      Backpropagation(node, node->WinRatio());
      return nullptr;
     }
@@ -162,19 +164,32 @@ private:
   int Simulation(TreeNodePtr node) {
     Game simulated_game = node->state;
     bool our_turn = node->our_turn;
-    
-    float reward;
-    while(!simulated_game.GameOver()) {
+
+    float reward = 0.0;
+    bool game_over = simulated_game.GameOver();
+
+    if(game_over) {
+//      std::cout << "Trying to start simulation from game that's already over" << std::endl;
+      reward = simulated_game.GetReward();
+    }
+
+    while(!game_over) {
       auto actions = simulated_game.GetAvailableActions();
       reward = simulated_game.ApplyAction(*select_randomly(actions.begin(), actions.end()));
       our_turn = !our_turn;
+      game_over = simulated_game.GameOver();
     }
 
     int score;
-    if(simulated_game.Draw()) {
-      score = 0;
-    } else if(our_turn == node->our_turn) {
+    if(our_turn == node->our_turn) {
       score = reward;
+      if(score != 1 && !simulated_game.Draw()) {
+        std::cout << "---------???---------" << std::endl;
+        std::cout << "Draw: " << simulated_game.Draw() << std::endl;
+        std::cout << "GameOver: " << simulated_game.GameOver() << std::endl;
+        std::cout << "Score: " << score << std::endl;
+        std::cout << "simulated_game.reward: " << simulated_game.GetReward() << std::endl;
+      }
     } else {
       score = -reward;
     }

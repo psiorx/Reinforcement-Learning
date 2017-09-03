@@ -78,8 +78,8 @@ public:
         return board_state_;
     }
 
-    float GetReward() {
-        if(GameOver() &&  !Draw()) {
+    float GetReward() const {
+        if(GameOver() && !Draw()) {
             return 1.0;
         }
         return 0.0f;
