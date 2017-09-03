@@ -60,9 +60,14 @@ public:
         state_after_last_move = "";
     }
 
+    void Update(const Game& new_state, float reward) {
+
+    }
+
+
 private:
     float GetValue(const Game& state) {
-        if(state.GameOver() /*&& !state.Draw()*/) {
+        if(state.GameOver() && !state.Draw()) {
             return 1.0f;
         }
         std::string state_string = state.GetStateString();

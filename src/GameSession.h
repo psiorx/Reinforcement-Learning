@@ -9,15 +9,19 @@ public:
 
     typename Game::Status PlayOnce() {
         while(true) {
-            game.ApplyAction(player1.GetAction(game));
+            typename Game::Action action = player1.GetAction(game);
+            float reward = game.ApplyAction(action);
+            player1.Update(game, reward);
+            player2.Update(game, -reward);
             if(game.GameOver()) {
-                player2.GetAction(game);
                 break;
             }
-            auto test = player2.GetAction(game);
-            game.ApplyAction(test);
+
+            action = player2.GetAction(game);
+            game.ApplyAction(action);
+            player2.Update(game, reward);
+            player1.Update(game, -reward);
             if(game.GameOver()) {
-                player1.GetAction(game);
                 break;
             }
         }

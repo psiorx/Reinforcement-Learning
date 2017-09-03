@@ -8,20 +8,27 @@
 #include "MonteCarloTreeSearchAgent.h"
 #include "TestGame.h"
 #include "Stopwatch.h"
+#include "QLearningAgent.h"
+
+#include <unordered_map>
 
 int main(int argc, char* argv[])  {
     std::srand ( unsigned ( std::time(0) ) );
     
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 100;
+    QLearningAgent<TicTacToe> agent;
 
+    // std::hash<TicTacToeAction> hash;
     TicTacToe game;
-    MinimaxAgent<TicTacToe> player1;
+    TemporalDifferenceAgent<TicTacToe> player1;
     MonteCarloTreeSearchAgent<TicTacToe> player2;
-    player2.SetIterationLimit(10000);
-
-    GameSession<TicTacToe, MinimaxAgent, MonteCarloTreeSearchAgent> 
+    player2.SetIterationLimit(1000);
+    GameSession<TicTacToe, TemporalDifferenceAgent, MonteCarloTreeSearchAgent> 
     session(game, player1, player2);
+    session.PlayN(1000);
+    player1.SetExplorationRate(0);
+
     Stopwatch sw;
 
     sw.Start();

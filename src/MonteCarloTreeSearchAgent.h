@@ -84,6 +84,7 @@ public:
   }
 
   void Reset() { }
+  void Update(const Game& new_state, float reward) { }
 
   void SetIterationLimit(size_t iterations) {
     iteration_limit = iterations;
@@ -135,8 +136,7 @@ private:
     }
     
     if(!best_child) {
-     int score = GetScore(node);
-     Backpropagation(node, score);
+     Backpropagation(node, node->WinRatio());
      return nullptr;
     }
      
@@ -163,9 +163,10 @@ private:
     Game simulated_game = node->state;
     bool our_turn = node->our_turn;
     
+    float reward;
     while(!simulated_game.GameOver()) {
       auto actions = simulated_game.GetAvailableActions();
-      simulated_game.ApplyAction(*select_randomly(actions.begin(), actions.end()));
+      reward = simulated_game.ApplyAction(*select_randomly(actions.begin(), actions.end()));
       our_turn = !our_turn;
     }
 
@@ -173,9 +174,9 @@ private:
     if(simulated_game.Draw()) {
       score = 0;
     } else if(our_turn == node->our_turn) {
-      score = 1;
+      score = reward;
     } else {
-      score = -1;
+      score = -reward;
     }
     return score;
   }
@@ -207,6 +208,7 @@ private:
       Backpropagation(expanded_node, reward);
     } 
   }
+
 
   size_t iteration_limit;
   float exploration_rate;

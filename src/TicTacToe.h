@@ -13,14 +13,14 @@ enum class TicTacToeStatus {
 
 std::string to_string(TicTacToeStatus status) {
     switch(status) {
-    case TicTacToeStatus::X_WINS:
-        return "X_WINS";
-    case TicTacToeStatus::O_WINS:
-        return "O_WINS";
-    case TicTacToeStatus::DRAW:
-        return "DRAW";
-    case TicTacToeStatus::IN_PROGRESS:
-        return "IN_PROGRESS";
+        case TicTacToeStatus::X_WINS:
+            return "X_WINS";
+        case TicTacToeStatus::O_WINS:
+            return "O_WINS";
+        case TicTacToeStatus::DRAW:
+            return "DRAW";
+        case TicTacToeStatus::IN_PROGRESS:
+            return "IN_PROGRESS";
     }
     return "UNKNOWN";
 }
@@ -28,7 +28,27 @@ std::string to_string(TicTacToeStatus status) {
 struct TicTacToeAction {
     int row_index;
     int column_index;
+    
+    bool operator==(const TicTacToeAction &other) const
+    { return (row_index == other.row_index
+            && column_index == other.column_index);
+    }
 };
+
+namespace std
+{
+    template <>
+    struct hash<TicTacToeAction>
+    {
+        size_t operator()( const TicTacToeAction& k ) const
+        {
+            size_t res = 17;
+            res = res * 31 + hash<int>()( k.row_index );
+            res = res * 31 + hash<int>()( k.column_index );
+            return res;
+        }
+    };
+}
 
 std::string to_string(TicTacToeAction const& action) {
     return "{"
@@ -58,6 +78,13 @@ public:
         return board_state_;
     }
 
+    float GetReward() {
+        if(GameOver() &&  !Draw()) {
+            return 1.0;
+        }
+        return 0.0f;
+    }
+
     void Reset() {
         game_status_ = TicTacToeStatus::IN_PROGRESS;
         board_state_.fill('-');
@@ -79,10 +106,11 @@ public:
         return actions;
     }
 
-    void ApplyAction(TicTacToeAction const& action) {
+    float ApplyAction(TicTacToeAction const& action) {
         board_state_(action.row_index, action.column_index) = x_turn ? 'x' : 'o';
         x_turn = !x_turn;
         game_status_ = UpdateTicTacToeStatus();
+        return GetReward();
     }
 
     TicTacToe ForwardModel(TicTacToeAction const& action) const {
