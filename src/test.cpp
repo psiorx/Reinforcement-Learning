@@ -16,12 +16,14 @@ int main(int argc, char* argv[])  {
     int num_games = 100;
 
     TicTacToe game;
-    MinimaxAgent<TicTacToe> player1;
+    TemporalDifferenceAgent<TicTacToe> player1;
     MonteCarloTreeSearchAgent<TicTacToe> player2;
-    player2.SetIterationLimit(10000);
-
-    GameSession<TicTacToe, MinimaxAgent, MonteCarloTreeSearchAgent> 
+    player2.SetIterationLimit(1000);
+    GameSession<TicTacToe, TemporalDifferenceAgent, MonteCarloTreeSearchAgent> 
     session(game, player1, player2);
+    session.PlayN(1000);
+    player1.SetExplorationRate(0);
+
     Stopwatch sw;
 
     sw.Start();
