@@ -26,20 +26,25 @@ int main(int argc, char* argv[])  {
     GameSession<TicTacToe, TemporalDifferenceAgent, TemporalDifferenceAgent> 
     training_session(game, agent1, agent2);
 
-    for(int i = 0; i < 100 ; i++) {
+    int training_epochs = 100;
+    for(int i = 0; i < training_epochs ; i++) {
         std::cout << "Epoch " << i << std::endl;
-        agent1.SetExplorationRate(1.0/(i+1));
-        agent2.SetExplorationRate(1.0/(i+1));
-        agent1.SetLearningRate(1.0/(i+1));
-        agent2.SetLearningRate(1.0/(i+1));
-        training_session.PlayN(10000);
+        float decay = (training_epochs - i) / (float)training_epochs;
+        agent1.SetExplorationRate(decay);
+        agent2.SetExplorationRate(decay);
+        agent1.SetLearningRate(decay);
+        agent2.SetLearningRate(decay);
+        training_session.PlayN(1000);
     }
 
+
     Stopwatch sw;
-    GameSession<TicTacToe, TemporalDifferenceAgent, MinimaxAgent> 
-      session(game, agent1, god);
+    MonteCarloTreeSearchAgent<TicTacToe> mcts;
+    GameSession<TicTacToe, TemporalDifferenceAgent, MonteCarloTreeSearchAgent> 
+      session(game, agent1, mcts);
  
     agent1.SetExplorationRate(0);
+    // agent1.SetLearningRate(0);
 
     sw.Start();
     for(int i = 0; i < num_games ; i++) {
