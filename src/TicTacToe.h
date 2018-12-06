@@ -38,10 +38,8 @@ struct TicTacToeAction {
 namespace std
 {
     template <>
-    struct hash<TicTacToeAction>
-    {
-        size_t operator()( const TicTacToeAction& k ) const
-        {
+    struct hash<TicTacToeAction> {
+        size_t operator()( const TicTacToeAction& k ) const {
             size_t res = 17;
             res = res * 31 + hash<int>()( k.row_index );
             res = res * 31 + hash<int>()( k.column_index );
@@ -58,6 +56,7 @@ std::string to_string(TicTacToeAction const& action) {
 
 class TicTacToe {
 public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     using Action = TicTacToeAction;
     using Status = TicTacToeStatus;
     using BoardStateType = Eigen::Matrix<char, 3, 3>;

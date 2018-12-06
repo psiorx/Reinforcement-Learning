@@ -57,7 +57,7 @@ struct TreeNode {
 template <class Game>
 class MonteCarloTreeSearchAgent {
 public:
-  MonteCarloTreeSearchAgent() : exploration_rate(2), iteration_limit(100) { }  
+  MonteCarloTreeSearchAgent() : exploration_rate(2), iteration_limit(500) { }  
   using TreeNodePtr = TreeNode<Game>*;
 
   typename Game::Action GetAction(const Game& state) {
@@ -83,8 +83,14 @@ public:
    return best_action;
   }
 
+  void Experience(const std::string &state, 
+                  const typename Game::Action& action, 
+                  float reward, 
+                  const std::string &next_state,
+                  bool terminal) {
+  }
+
   void Reset() { }
-  void Update(const Game& new_state, float reward) { }
 
   void SetIterationLimit(size_t iterations) {
     iteration_limit = iterations;

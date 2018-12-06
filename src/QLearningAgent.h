@@ -3,6 +3,14 @@
 template <class Game>
 class QLearningAgent {
 public:
+    void Experience(const typename Game::BoardStateType& state, 
+                    const typename Game::Action& action, 
+                    float reward, 
+                    const typename Game::BoardStateType& next_state,
+                    bool terminal) {
+        
+    }
+
     typename Game::Action GreedyAction(const Game& state, const std::vector<typename Game::Action>& actions) {
         float best_value = -std::numeric_limits<float>::max();
         typename Game::Action best_action; //use ptr here?

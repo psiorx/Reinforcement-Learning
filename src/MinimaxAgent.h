@@ -24,6 +24,14 @@ public:
     return best_action;
   }
 
+  void Experience(const std::string &state, 
+                  const typename Game::Action& action, 
+                  float reward, 
+                  const std::string &next_state,
+                  bool terminal) {
+  }
+
+
   double MiniMax(const Game& state, bool maximizing_player) {
    std::string state_string = state.GetStateString();
    if(state.GameOver()) {

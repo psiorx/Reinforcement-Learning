@@ -18,18 +18,29 @@ int main(int argc, char* argv[])  {
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 100;
     QLearningAgent<TicTacToe> agent;
-
-    // std::hash<TicTacToeAction> hash;
     TicTacToe game;
-    TemporalDifferenceAgent<TicTacToe> player1;
-    MonteCarloTreeSearchAgent<TicTacToe> player2;
-    player2.SetIterationLimit(1000);
-    GameSession<TicTacToe, TemporalDifferenceAgent, MonteCarloTreeSearchAgent> 
-    session(game, player1, player2);
-    session.PlayN(1000);
-    player1.SetExplorationRate(0);
+    std::unordered_map<std::string, float> value_function;
+    MinimaxAgent<TicTacToe> god;
+    TemporalDifferenceAgent<TicTacToe> agent1;
+    TemporalDifferenceAgent<TicTacToe> agent2;
+    GameSession<TicTacToe, TemporalDifferenceAgent, TemporalDifferenceAgent> 
+    training_session(game, agent1, agent2);
+
+    for(int i = 0; i < 100 ; i++) {
+        std::cout << "Epoch " << i << std::endl;
+        agent1.SetExplorationRate(1.0/(i+1));
+        agent2.SetExplorationRate(1.0/(i+1));
+        agent1.SetLearningRate(1.0/(i+1));
+        agent2.SetLearningRate(1.0/(i+1));
+        training_session.PlayN(10000);
+    }
 
     Stopwatch sw;
+    GameSession<TicTacToe, TemporalDifferenceAgent, MinimaxAgent> 
+      session(game, agent1, god);
+ 
+    agent1.SetExplorationRate(0);
+    player2.SetIterationLimit(500);
 
     sw.Start();
     for(int i = 0; i < num_games ; i++) {

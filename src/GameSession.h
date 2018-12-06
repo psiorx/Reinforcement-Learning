@@ -8,20 +8,35 @@ public:
     : game(game), player1(agent1), player2(agent2) { }
 
     typename Game::Status PlayOnce() {
+        
+        std::string state_before;
+        typename Game::Action action;
+        float reward;
+        std::string state_after;
+        bool terminal;
+
         while(true) {
-            typename Game::Action action = player1.GetAction(game);
-            float reward = game.ApplyAction(action);
-            player1.Update(game, reward);
-            player2.Update(game, -reward);
-            if(game.GameOver()) {
+            state_before = game.GetStateString();
+            action = player1.GetAction(game);
+            reward = game.ApplyAction(action);
+            state_after = game.GetStateString();
+            terminal = game.GameOver();
+            player1.Experience(state_before, action, reward, state_after, terminal);
+            player2.Experience(state_before, action, -reward, state_after, terminal);
+
+            if(terminal) {
                 break;
             }
 
+            state_before = game.GetStateString();
             action = player2.GetAction(game);
-            game.ApplyAction(action);
-            player2.Update(game, reward);
-            player1.Update(game, -reward);
-            if(game.GameOver()) {
+            reward = game.ApplyAction(action);
+            state_after = game.GetStateString();
+            terminal = game.GameOver();
+            player2.Experience(state_before, action, reward, state_after, terminal);
+            player1.Experience(state_before, action, -reward, state_after, terminal);
+
+            if(terminal) {
                 break;
             }
         }
