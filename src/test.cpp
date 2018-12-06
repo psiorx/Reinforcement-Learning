@@ -40,7 +40,6 @@ int main(int argc, char* argv[])  {
       session(game, agent1, god);
  
     agent1.SetExplorationRate(0);
-    player2.SetIterationLimit(500);
 
     sw.Start();
     for(int i = 0; i < num_games ; i++) {
