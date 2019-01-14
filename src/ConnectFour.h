@@ -95,12 +95,15 @@ class ConnectFour {
     return GetReward();
   }
 
-  float GetReward() {
-    if(GameOver() && !Draw()) {
-      return 1.0f;
-    } else {
+  float GetReward() const {
+      if(GameOver() && !Draw()) {
+          return x_turn ? -1.0f : 1.0f;
+      }
       return 0.0f;
-    }   
+  }
+
+  bool FirstPlayersTurn() const {
+      return x_turn;
   }
 
   ConnectFour ForwardModel(ConnectFourAction const& action) const {

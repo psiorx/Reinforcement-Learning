@@ -79,9 +79,13 @@ public:
 
     float GetReward() const {
         if(GameOver() && !Draw()) {
-            return 1.0;
+            return x_turn ? -1.0f : 1.0f;
         }
         return 0.0f;
+    }
+
+    bool FirstPlayersTurn() const {
+        return x_turn;
     }
 
     void Reset() {

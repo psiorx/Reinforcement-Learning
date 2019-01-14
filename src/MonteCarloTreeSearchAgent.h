@@ -57,7 +57,7 @@ struct TreeNode {
 template <class Game>
 class MonteCarloTreeSearchAgent {
 public:
-  MonteCarloTreeSearchAgent() : exploration_rate(2), iteration_limit(500) { }  
+  MonteCarloTreeSearchAgent() : exploration_rate(2), iteration_limit(1000) { }  
   using TreeNodePtr = TreeNode<Game>*;
 
   typename Game::Action GetAction(const Game& state) {
@@ -71,8 +71,6 @@ public:
    double best_value = -10;
    typename Game::Action best_action;
    for(auto const& child : search_tree->children) {
-     //std::cout << child->stats.wins << "/" << child->stats.plays << std::endl;
-     //double value = child->WinRatio();
      double value = child->stats.plays;
      if(value >= best_value) {
        best_value = value;
@@ -83,11 +81,8 @@ public:
    return best_action;
   }
 
-  void Experience(const std::string &state, 
-                  const typename Game::Action& action, 
-                  float reward, 
-                  const std::string &next_state,
-                  bool terminal) {
+  void TakeAction(Game& game) {
+    game.ApplyAction(GetAction(game));
   }
 
   void Reset() { }
@@ -175,7 +170,6 @@ private:
     bool game_over = simulated_game.GameOver();
 
     if(game_over) {
-//      std::cout << "Trying to start simulation from game that's already over" << std::endl;
       reward = simulated_game.GetReward();
     }
 
@@ -189,13 +183,6 @@ private:
     int score;
     if(our_turn == node->our_turn) {
       score = reward;
-      if(score != 1 && !simulated_game.Draw()) {
-        std::cout << "---------???---------" << std::endl;
-        std::cout << "Draw: " << simulated_game.Draw() << std::endl;
-        std::cout << "GameOver: " << simulated_game.GameOver() << std::endl;
-        std::cout << "Score: " << score << std::endl;
-        std::cout << "simulated_game.reward: " << simulated_game.GetReward() << std::endl;
-      }
     } else {
       score = -reward;
     }
@@ -229,7 +216,6 @@ private:
       Backpropagation(expanded_node, reward);
     } 
   }
-
 
   size_t iteration_limit;
   float exploration_rate;

@@ -13,17 +13,18 @@ public:
                     const typename Game::Action& action, 
                     float reward, 
                     const std::string &next_state,
-                    bool terminal) {
+                    bool terminal,
+                    float td_target) {
 
         float state_value = GetValue(state);
         float next_state_value = 0;
 
-        if (!terminal) {
-            next_state_value = GetValue(next_state);
+        if (terminal) {
+            next_state_value = reward;
+            (*value_function)[next_state] = reward;
         }
 
-        float td_target = reward + next_state_value;
-        (*value_function)[state] = state_value + alpha * (td_target - state_value);
+        (*value_function)[state] = state_value + alpha * (td_target - state_value); 
 
         // std::cout << "------- TD Experience ------" << std::endl;
         // std::cout << "State: " << state << std::endl;
@@ -31,36 +32,53 @@ public:
         // std::cout << "Next State: " << next_state << std::endl;
         // std::cout << "Terminal: " << (int)terminal << std::endl;
         // std::cout << "state_value: " << state_value 
-        //           << " next_state_value: " << next_state_value << std::endl;        
+        //           << " next_state_value: " << next_state_value << std::endl;
     }
 
-    typename Game::Action GreedyAction(const Game& state, const std::vector<typename Game::Action>& actions) {
-        float best_value = -100.0f;
+    typename Game::Action GreedyAction(const Game& state, 
+                                       const std::vector<typename Game::Action>& actions, float& best_value) {
+        best_value = -100.0;
+        // if(value_sign < 0) {
+        //     std::cout << "minimizing_player before: " << best_value << std::endl;
+        // } else {
+        //     std::cout << "maximizing_player before: " << best_value << std::endl;            
+        // }
         typename Game::Action best_action;
+
         for(auto const& action : actions) {
             Game next_state = state.ForwardModel(action);
             float state_value = value_sign * GetValue(next_state.GetStateString());
+            // std::cout << "state_value: " << state_value << std::endl;
             if(state_value >= best_value) {
                 best_value = state_value;
                 best_action = action;
             }
         }
+
+        // if(value_sign < 0) {
+        //     std::cout << "minimizing_player after: " << best_value << std::endl;
+        // } else {
+        //     std::cout << "maximizing_player after: " << best_value << std::endl;            
+        // }
         return best_action;
     }
 
-    typename Game::Action GetAction(const Game& state) {
-        typename Game::Action action;
-
-        auto actions = state.GetAvailableActions();
-
+    void TakeAction(Game& game) {
+        typename Game::Action random_action, greedy_action;
+        auto actions = game.GetAvailableActions();
         float random = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+        bool exploratory = false;
         if(random < epsilon) {
-            action = *select_randomly(actions.begin(), actions.end());
-        } else {
-            action = GreedyAction(state, actions);
-        }
-        
-        return action;
+            random_action = *select_randomly(actions.begin(), actions.end());
+            exploratory = true;
+        }                
+        value_sign = game.FirstPlayersTurn() ? 1.0f : -1.0f;
+        float best_value;
+        greedy_action = GreedyAction(game, actions, best_value);
+        std::string state = game.GetStateString();
+        float reward = game.ApplyAction(exploratory ? random_action : greedy_action);
+        std::string next_state = game.GetStateString();
+        Experience(state, greedy_action, reward, next_state, game.GameOver(), best_value);
     }
 
     void SetLearningRate(float alpha) {
