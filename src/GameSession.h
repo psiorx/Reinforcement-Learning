@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <unordered_map>
 
 template <class Game, template <class Game> class Agent1, template <class Game> class Agent2>
 class GameSession {

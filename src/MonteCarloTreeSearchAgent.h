@@ -57,7 +57,7 @@ struct TreeNode {
 template <class Game>
 class MonteCarloTreeSearchAgent {
 public:
-  MonteCarloTreeSearchAgent() : exploration_rate(2), iteration_limit(1000) { }  
+  MonteCarloTreeSearchAgent() : exploration_rate(2), iteration_limit(100) { }  
   using TreeNodePtr = TreeNode<Game>*;
 
   typename Game::Action GetAction(const Game& state) {
@@ -137,9 +137,8 @@ private:
     }
     
     if(!best_child) {
-
-     //std::cout <<  "Backprop leaf node: " << node->WinRatio() << std::endl;
-     Backpropagation(node, node->WinRatio());
+     int score = GetScore(node);
+     Backpropagation(node, score);
      return nullptr;
     }
      
@@ -165,26 +164,20 @@ private:
   int Simulation(TreeNodePtr node) {
     Game simulated_game = node->state;
     bool our_turn = node->our_turn;
-
-    float reward = 0.0;
-    bool game_over = simulated_game.GameOver();
-
-    if(game_over) {
-      reward = simulated_game.GetReward();
-    }
-
-    while(!game_over) {
+    
+    while(!simulated_game.GameOver()) {
       auto actions = simulated_game.GetAvailableActions();
-      reward = simulated_game.ApplyAction(*select_randomly(actions.begin(), actions.end()));
+      simulated_game.ApplyAction(*select_randomly(actions.begin(), actions.end()));
       our_turn = !our_turn;
-      game_over = simulated_game.GameOver();
     }
 
     int score;
-    if(our_turn == node->our_turn) {
-      score = reward;
+    if(simulated_game.Draw()) {
+      score = 0;
+    } else if(our_turn == node->our_turn) {
+      score = 1;
     } else {
-      score = -reward;
+      score = -1;
     }
     return score;
   }
