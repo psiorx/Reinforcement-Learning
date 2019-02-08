@@ -9,14 +9,12 @@
 #include "MonteCarloTreeSearchAgent.h"
 #include "TestGame.h"
 #include "Stopwatch.h"
-#include "QLearningAgent.h"
 
 int main(int argc, char* argv[])  {
     std::srand ( unsigned ( std::time(0) ) );
 
     int x_wins=0, o_wins=0, draws=0;
     int num_games = 1000;
-    QLearningAgent<TicTacToe> agent;
     TicTacToe game;
     std::unordered_map<std::string, float> value_function, terminal_values;
     TemporalDifferenceAgent<TicTacToe> agent1(&value_function, &terminal_values);
@@ -35,9 +33,10 @@ int main(int argc, char* argv[])  {
     training_session.PlayN(training_games);
 
     Stopwatch sw;
+    MinimaxAgent<TicTacToe> god;
     MonteCarloTreeSearchAgent<TicTacToe> mcts;
-    GameSession<TicTacToe, TemporalDifferenceAgent, MonteCarloTreeSearchAgent>
-    session(game, agent1, mcts);
+    GameSession<TicTacToe, MinimaxAgent, MonteCarloTreeSearchAgent>
+    session(game, god, mcts);
 
    agent1.SetExplorationRate(0);
    agent2.SetExplorationRate(0);

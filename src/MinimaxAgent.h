@@ -5,6 +5,11 @@
 template <class Game>
 class MinimaxAgent {
 public: 
+
+  void TakeAction(Game& state) {
+    state.ApplyAction(GetAction(state));
+  }
+
   typename Game::Action GetAction(const Game& state) {
     if(minimax_tree.find(state.GetStateString()) == minimax_tree.end()) {
       MiniMax(state, true);
