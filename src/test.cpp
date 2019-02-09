@@ -31,7 +31,7 @@ int main(int argc, char* argv[])  {
     agent2.SetLearningRate(1);
 
     training_session.PlayN(training_games);
-
+  
     Stopwatch sw;
     MinimaxAgent<TicTacToe> god;
     MonteCarloTreeSearchAgent<TicTacToe> mcts;
