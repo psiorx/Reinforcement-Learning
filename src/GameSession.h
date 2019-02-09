@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <unordered_map>
 
 template <class Game, template <class Game> class Agent1, template <class Game> class Agent2>
 class GameSession {
@@ -8,16 +9,14 @@ public:
     : game(game), player1(agent1), player2(agent2) { }
 
     typename Game::Status PlayOnce() {
+        Reset();
         while(true) {
-            game.ApplyAction(player1.GetAction(game));
+            player1.TakeAction(game);
             if(game.GameOver()) {
-                player2.GetAction(game);
                 break;
             }
-            auto test = player2.GetAction(game);
-            game.ApplyAction(test);
+            player2.TakeAction(game);
             if(game.GameOver()) {
-                player1.GetAction(game);
                 break;
             }
         }
@@ -29,7 +28,6 @@ public:
         status_results.reserve(n);
         for(std::size_t count = 0; count < n ; count++) {
             status_results.push_back(PlayOnce());
-            Reset();
         }
         return status_results;
     }

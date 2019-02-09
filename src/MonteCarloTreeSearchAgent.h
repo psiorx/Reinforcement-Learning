@@ -71,8 +71,6 @@ public:
    double best_value = -10;
    typename Game::Action best_action;
    for(auto const& child : search_tree->children) {
-     //std::cout << child->stats.wins << "/" << child->stats.plays << std::endl;
-     //double value = child->WinRatio();
      double value = child->stats.plays;
      if(value >= best_value) {
        best_value = value;
@@ -81,6 +79,10 @@ public:
    }
 
    return best_action;
+  }
+
+  void TakeAction(Game& game) {
+    game.ApplyAction(GetAction(game));
   }
 
   void Reset() { }

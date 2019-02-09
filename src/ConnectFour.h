@@ -84,7 +84,7 @@ class ConnectFour {
     return actions;
   }
 
-  void ApplyAction(ConnectFourAction const & action) {
+  float ApplyAction(ConnectFourAction const & action) {
     int row = num_rows - 1;
     while (!(board_state_(row, action.column_index) == '-')) {
       --row;
@@ -92,6 +92,18 @@ class ConnectFour {
     board_state_(row, action.column_index) = x_turn ? 'x' : 'o';
     x_turn = !x_turn;
     game_status_ = UpdateConnectFourStatus();
+    return GetReward();
+  }
+
+  float GetReward() const {
+      if(GameOver() && !Draw()) {
+          return x_turn ? -1.0f : 1.0f;
+      }
+      return 0.0f;
+  }
+
+  bool FirstPlayersTurn() const {
+      return x_turn;
   }
 
   ConnectFour ForwardModel(ConnectFourAction const& action) const {

@@ -11,5 +11,7 @@ template<typename Iter>
 inline Iter select_randomly(Iter start, Iter end) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
-    return select_randomly(start, end, gen);
+    Iter choice = select_randomly(start, end, gen);
+    // std::cout << std::distance(start, choice) << "/" << std::distance(start, end) << std::endl;
+    return choice;
 }

@@ -5,6 +5,11 @@
 template <class Game>
 class MinimaxAgent {
 public: 
+
+  void TakeAction(Game& state) {
+    state.ApplyAction(GetAction(state));
+  }
+
   typename Game::Action GetAction(const Game& state) {
     if(minimax_tree.find(state.GetStateString()) == minimax_tree.end()) {
       MiniMax(state, true);
@@ -23,6 +28,14 @@ public:
     }
     return best_action;
   }
+
+  void Experience(const std::string &state, 
+                  const typename Game::Action& action, 
+                  float reward, 
+                  const std::string &next_state,
+                  bool terminal) {
+  }
+
 
   double MiniMax(const Game& state, bool maximizing_player) {
    std::string state_string = state.GetStateString();
