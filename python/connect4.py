@@ -7,7 +7,8 @@ class Connect4:
     def reset(self):
         self.board = np.zeros((6, 7), dtype=int)
         self.player = 1
-        self.game_over = False            
+        self.game_over = False
+        self.reward = 0            
 
     def take_action(self, column):      
         open_row = self.get_open_row(column)
@@ -16,11 +17,11 @@ class Connect4:
             self.player = 1 if self.player == 2 else 2
             if self.is_draw():
                 self.game_over = True
-                return 0
-            if self.is_win((open_row, column)):
-                return 1 if self.player == 2 else -1
+                self.reward = 0  
+            elif self.is_win((open_row, column)):
                 self.game_over = True
-        return 0
+                self.reward = 1 if self.player == 2 else -1
+        return self.reward
 
     def count_matches(self, index, delta):
         count = 0
