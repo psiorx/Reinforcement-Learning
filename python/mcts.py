@@ -28,7 +28,8 @@ class AlphaZeroMCTS:
     def search(self, num_iterations):
         for i in range(num_iterations):
             self.search_internal(0)
-            self.game = copy.deepcopy(self.orig_game)   
+            self.game = copy.deepcopy(self.orig_game)
+        return self.get_policy()        
 
     def search_internal(self, depth = 0):
         if depth > self.max_depth:
