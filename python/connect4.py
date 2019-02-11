@@ -21,6 +21,10 @@ class Connect4:
             elif self.is_win((open_row, column)):
                 self.game_over = True
                 self.reward = 1 if self.player == 2 else -1
+        else:
+            print("invalid move: ")
+            print(self.get_valid_actions())
+            print(column)
         return self.reward
 
     def count_matches(self, index, delta):
