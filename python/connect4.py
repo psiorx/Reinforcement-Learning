@@ -62,7 +62,7 @@ class Connect4:
             return True
 
         diagonal_matches = 1 + self.count_matches(position, (1, 1)) + self.count_matches(position, (-1, -1))
-        if vertical_matches >= 4:
+        if diagonal_matches >= 4:
             return True
 
         return False
