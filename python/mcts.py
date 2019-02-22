@@ -8,6 +8,7 @@ class Node:
         self.valid_actions[valid_actions] = 1
         self.P = policy
         self.P[np.where(self.valid_actions != 1)] = 0
+        self.P /= sum(self.P)
         self.Q = np.zeros(num_actions)
         self.N = np.zeros(num_actions)
 
@@ -17,8 +18,9 @@ class AlphaZeroMCTS:
         self.game = copy.deepcopy(game)
         self.orig_game = game
         self.nodes = dict()
-        self.c = 0.5
+        self.c = 1
         self.max_depth = 0
+        self.player = self.orig_game.player
 
     def get_policy(self):
         board_key = self.game.board.tobytes()
@@ -27,7 +29,7 @@ class AlphaZeroMCTS:
 
     def search(self, num_iterations):
         for i in range(num_iterations):
-            self.search_internal(0)
+            reward = self.search_internal(0)
             self.game = copy.deepcopy(self.orig_game)
         return self.get_policy()        
 
@@ -35,22 +37,21 @@ class AlphaZeroMCTS:
         if depth > self.max_depth:
             self.max_depth = depth
         
-        ## BASE CASES            
+        ## BASE CASES
         #terminal state
         if self.game.game_over:
-            return -self.game.reward
+            return 0 if self.game.draw else 1
 
         #expansion
         board_key = self.game.board.tobytes()
         if board_key not in self.nodes:
             output = self.net.predict(self.game.board)
-            policy = output[0].detach().cpu().numpy().squeeze()
+            policy = np.exp(output[0].detach().cpu().numpy().squeeze())
             value = output[1].detach().cpu().numpy()
             self.nodes[board_key] = Node(self.game.get_valid_actions(), policy)
             return -value
 
         ## RECURSIVE CASE
-        
         #selection
         node = self.nodes[board_key] 
         #compute confidence bounds

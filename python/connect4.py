@@ -8,25 +8,35 @@ class Connect4:
         self.board = np.zeros((6, 7), dtype=int)
         self.player = 1
         self.game_over = False
-        self.reward = 0            
+        self.draw = False
+        self.winner = 0
 
     def take_action(self, column):      
         open_row = self.get_open_row(column)
         if open_row >= 0:
             self.board[open_row, column] = self.player
-            self.player = 1 if self.player == 2 else 2
             if self.is_draw():
                 self.game_over = True
-                self.reward = 0  
+                self.draw = True
             elif self.is_win((open_row, column)):
                 self.game_over = True
-                self.reward = 1 if self.player == 2 else -1
+                self.draw = False
+                self.winner = self.player
+            self.player = 1 if self.player == 2 else 2
         else:
             print("invalid move: ")
             print(self.get_valid_actions())
             print(column)
-        return self.reward
 
+    def get_reward(self, player):
+        if self.draw or not self.game_over:
+            return 0
+
+        if self.winner != player:
+            return 1
+        else:
+            return -1
+        
     def count_matches(self, index, delta):
         count = 0
         current_index = index

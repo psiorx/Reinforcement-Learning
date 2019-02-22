@@ -1,9 +1,10 @@
 import numpy as np
 from connect4 import Connect4
-from neuralnetwork import AlphaZeroNet
+from neuralnetwork import NNet
 from mcts import AlphaZeroMCTS
 
-net = AlphaZeroNet(256, "cuda")
+net = NNet(256, "cuda")
+net.eval()
 np.set_printoptions(precision=4)
 
 #
