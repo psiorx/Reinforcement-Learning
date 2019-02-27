@@ -10,13 +10,14 @@ from threading import Thread
 from queue import Queue
 
 # hyperparams
-batch_size = 128
-mcts_iterations = 128
+batch_size = 256
+mcts_iterations = 256
 exp_pool_size = 4098
-duel_interval = 50
+duel_interval = 20
 duel_acceptance = 60.0
-channel_width = 512
-network_file = "connectfo_512.net"
+channel_width = 128
+training_iterations = 10
+network_file = "connectfo_128.net"
 
 np.set_printoptions(precision=4)
 
@@ -31,12 +32,12 @@ net.eval()
 training_net = copy.deepcopy(net)
 training_net.train()
 
-def get_experience(net):
-    net.eval()
+def get_experience(current_net):
+    current_net.eval()
     game = Connect4()            
     experiences = []
     while not game.game_over:
-        mcts = AlphaZeroMCTS(game, net)
+        mcts = AlphaZeroMCTS(game, current_net)
         policy = mcts.search(mcts_iterations)
         action = np.random.choice(range(len(policy)), p=policy)
         e = [copy.deepcopy(game.board), copy.deepcopy(policy), game.player, None]
@@ -112,7 +113,7 @@ while True:
         for idx in training_indexes:
             batch.append(exp_pool[idx])
         print("training episode %d with batch: %d" % (training_episodes, len(batch)))
-        training_net.process_data(batch)
+        training_net.process_data(batch, training_iterations)
         training_episodes += 1
         if training_episodes % duel_interval == 0:
             training_net.eval()

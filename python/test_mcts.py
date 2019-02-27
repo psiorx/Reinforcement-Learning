@@ -1,9 +1,11 @@
+import torch
 import numpy as np
 from connect4 import Connect4
 from neuralnetwork import NNet
 from mcts import AlphaZeroMCTS
 
 net = NNet(256, "cuda")
+#net = torch.load("/home/psior/connectfo_512.net")
 net.eval()
 np.set_printoptions(precision=4)
 
@@ -34,17 +36,19 @@ def testGame1(iters):
 
 def testGame2(iters):
     game = Connect4()
+
     for a in [0, 0, 1, 0, 1, 0]:
         game.take_action(a)
 
     mcts = AlphaZeroMCTS(game, net)
     policy = mcts.search(iters)
+
     action = np.argmax(policy)
+
     if action != 0:
         return 0
     else:
         return 1
-
 #
 #
 # 2

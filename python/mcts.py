@@ -10,6 +10,7 @@ class Node:
         self.P[np.where(self.valid_actions != 1)] = 0
         self.P /= sum(self.P)
         self.Q = np.zeros(num_actions)
+        self.W = np.zeros(num_actions)
         self.N = np.zeros(num_actions)
 
 class AlphaZeroMCTS:
@@ -30,7 +31,7 @@ class AlphaZeroMCTS:
     def search(self, num_iterations):
         for i in range(num_iterations):
             reward = self.search_internal(0)
-            self.game = copy.deepcopy(self.orig_game)
+            self.game = copy.deepcopy(self.orig_game)            
         return self.get_policy()        
 
     def search_internal(self, depth = 0):
@@ -56,13 +57,17 @@ class AlphaZeroMCTS:
         node = self.nodes[board_key] 
         #compute confidence bounds
         U = node.Q + self.c * node.P * np.sqrt(sum(node.N)) / (1 + node.N)
-        U[np.where(node.valid_actions == 0)] = -1
+
+        U[np.where(node.valid_actions == 0)] = -1            
         max_indexes = np.where(U == max(U))[0]
         action_index = np.random.choice(max_indexes)
+
         self.game.take_action(action_index)
         v = self.search_internal(depth + 1)
 
         #backpropagation
-        node.Q[action_index] = (node.N[action_index] * node.Q[action_index] + v) / (node.N[action_index] + 1)
         node.N[action_index] += 1
+        node.W[action_index] += v
+        node.Q[action_index] = node.W[action_index] / node.N[action_index]
+
         return -v

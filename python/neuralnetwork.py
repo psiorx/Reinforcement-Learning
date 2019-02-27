@@ -82,7 +82,7 @@ class NNet(nn.Module):
         input = torch.from_numpy(np.append(channel1, channel2)).reshape(1, 2, 6, 7).float().to(self.device)
         return self.forward(input)
 
-    def process_data(self, data):
+    def process_data(self, data, iters):
         self.train()
         board_states = np.empty((0, 2, 6, 7))
         policies = np.empty((0, 7))
@@ -108,7 +108,7 @@ class NNet(nn.Module):
         optimizer = optim.Adam(self.parameters())        
         value_criterion = nn.MSELoss()
 
-        for i in range(10):
+        for i in range(iters):
             policies_predicted, values_predicted = self.forward(boards_tensor)
 
             value_loss = torch.sum((values_tensor-values_predicted.view(-1))**2)/values_tensor.size()[0]
@@ -142,6 +142,7 @@ class AlphaZeroNet(nn.Module):
         self.vfc2 = nn.Linear(out_channels, 1)
         self.device = torch.device(device)
         self.to(self.device)
+
     # #2x1x1 conv -> bn -> relu -> fc
     def policy_head(self, x):
         out = self.pconv1(x) 
