@@ -87,6 +87,7 @@ class NNet(nn.Module):
         board_states = np.empty((0, 2, 6, 7))
         policies = np.empty((0, 7))
         values = np.empty((0, 1))
+
         for experience in data:
             board = experience[0]
             board_channel1 = np.zeros((6, 7))   
@@ -107,16 +108,15 @@ class NNet(nn.Module):
 
         optimizer = optim.Adam(self.parameters())        
         value_criterion = nn.MSELoss()
+        policy_criterion = nn.KLDivLoss()
 
         for i in range(iters):
-            policies_predicted, values_predicted = self.forward(boards_tensor)
-
-            value_loss = torch.sum((values_tensor-values_predicted.view(-1))**2)/values_tensor.size()[0]
-            policy_loss = -torch.sum(policies_tensor*policies_predicted)/policies_tensor.size()[0]
-            total_loss = policy_loss + value_loss
+            policies_predicted, values_predicted = self.forward(boards_tensor) 
+            value_loss = value_criterion(values_predicted, values_tensor)
+            policy_loss = policy_criterion(policies_predicted, policies_tensor)
+            # policy_loss = -torch.sum(policies_tensor*policies_predicted)/policies_tensor.size()[0]
+            total_loss = policy_loss + value_loss   
             print("v: %f p: %f" % (value_loss.item(), policy_loss.item()))
-            # print(torch.exp(policies_predicted[0]))
-            # print(policies_tensor[0])
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
@@ -208,7 +208,6 @@ class AlphaZeroNet(nn.Module):
         for i in range(10):
             policies_predicted, values_predicted = self.forward(boards_tensor)
             value_loss = value_criterion(values_predicted, values_tensor)
-            # policy_loss = torch.zeros_like(policies_tensor, requires_grad=True)
             policy_loss = -torch.sum(policies_tensor*policies_predicted)/policies_tensor.size()[0]
             total_loss = policy_loss + value_loss
             print("v: %f p: %f" % (value_loss.item(), policy_loss.item()))

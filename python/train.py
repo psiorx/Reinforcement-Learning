@@ -15,9 +15,9 @@ mcts_iterations = 256
 exp_pool_size = 4098
 duel_interval = 20
 duel_acceptance = 60.0
-channel_width = 128
-training_iterations = 10
-network_file = "connectfo_128.net"
+channel_width = 256
+training_iterations = 20
+network_file = "connectfo_256.net"
 
 np.set_printoptions(precision=4)
 

@@ -5,7 +5,7 @@ from neuralnetwork import NNet
 from mcts import AlphaZeroMCTS
 
 net = NNet(256, "cuda")
-#net = torch.load("/home/psior/connectfo_512.net")
+# net = torch.load("/home/psior/Reinforcement-Learning/python/connectfo_256.net")
 net.eval()
 np.set_printoptions(precision=4)
 
