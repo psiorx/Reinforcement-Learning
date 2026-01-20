@@ -9,7 +9,7 @@ class ResidualBlock(nn.Module):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(channels)
-        self.relu = nn.ReLU(inplace=True)
+        self.act = nn.SiLU(inplace=True)
         self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(channels)
 
@@ -17,11 +17,11 @@ class ResidualBlock(nn.Module):
         residual = x
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        out = self.act(out)
         out = self.conv2(out)
         out = self.bn2(out)
         out += residual
-        out = self.relu(out)
+        out = self.act(out)
         return out
 
 
@@ -74,11 +74,15 @@ class NNet(nn.Module):
 
         return F.log_softmax(pi, dim=1), torch.tanh(v)
 
-    def predict(self, board):
+    def predict(self, board, player=None):
         channel1 = np.zeros((6, 7), dtype=int)
         channel2 = np.zeros((6, 7), dtype=int)
-        channel1[np.where(board==1)] = 1
-        channel2[np.where(board==2)] = 1
+        if player is None or player == 1:
+            channel1[np.where(board == 1)] = 1
+            channel2[np.where(board == 2)] = 1
+        else:
+            channel1[np.where(board == 2)] = 1
+            channel2[np.where(board == 1)] = 1
         input = torch.from_numpy(np.append(channel1, channel2)).reshape(1, 2, 6, 7).float().to(self.device)
         return self.forward(input)
 
@@ -90,21 +94,27 @@ class NNet(nn.Module):
 
         for experience in data:
             board = experience[0]
+            player = experience[2] if len(experience) > 2 else 1
             board_channel1 = np.zeros((6, 7))   
-            board_channel1[np.where(board == 1)] = 1
+            if player == 1:
+                board_channel1[np.where(board == 1)] = 1
+            else:
+                board_channel1[np.where(board == 2)] = 1
             
             board_channel2 = np.zeros((6, 7))
-            board_channel2[np.where(board == 2)] = 1
+            if player == 1:
+                board_channel2[np.where(board == 2)] = 1
+            else:
+                board_channel2[np.where(board == 1)] = 1
 
             board_tensor = [np.reshape([board_channel1, board_channel2], [2, 6, 7])]
             board_states = np.append(board_states, board_tensor, axis=0)
             policies = np.append(policies, [experience[1]], axis=0)
-            values = np.append(values, experience[3])
+            values = np.append(values, [[experience[3]]], axis=0)
 
-        device = torch.device("cuda")
-        boards_tensor = torch.from_numpy(board_states).float().to(device)
-        policies_tensor = torch.from_numpy(policies).float().to(device)
-        values_tensor = torch.from_numpy(values).float().to(device)
+        boards_tensor = torch.from_numpy(board_states).float().to(self.device)
+        policies_tensor = torch.from_numpy(policies).float().to(self.device)
+        values_tensor = torch.from_numpy(values).float().to(self.device)
 
         optimizer = optim.Adam(self.parameters())        
         value_criterion = nn.MSELoss()
@@ -171,11 +181,15 @@ class AlphaZeroNet(nn.Module):
         out = self.res2(out)
         return self.policy_head(out), self.value_head(out)
 
-    def predict(self, board):
+    def predict(self, board, player=None):
         channel1 = np.zeros((6, 7), dtype=int)
         channel2 = np.zeros((6, 7), dtype=int)
-        channel1[np.where(board==1)] = 1
-        channel2[np.where(board==2)] = 1
+        if player is None or player == 1:
+            channel1[np.where(board == 1)] = 1
+            channel2[np.where(board == 2)] = 1
+        else:
+            channel1[np.where(board == 2)] = 1
+            channel2[np.where(board == 1)] = 1
         input = torch.from_numpy(np.append(channel1, channel2)).reshape(1, 2, 6, 7).float().to(self.device)
         return self.forward(input)
 
@@ -186,21 +200,27 @@ class AlphaZeroNet(nn.Module):
         values = np.empty((0, 1))
         for experience in data:
             board = experience[0]
+            player = experience[2] if len(experience) > 2 else 1
             board_channel1 = np.zeros((6, 7))
-            board_channel1[np.where(board == 1)] = 1
+            if player == 1:
+                board_channel1[np.where(board == 1)] = 1
+            else:
+                board_channel1[np.where(board == 2)] = 1
             
             board_channel2 = np.zeros((6, 7))
-            board_channel2[np.where(board == 2)] = 1
+            if player == 1:
+                board_channel2[np.where(board == 2)] = 1
+            else:
+                board_channel2[np.where(board == 1)] = 1
 
             board_tensor = [np.reshape([board_channel1, board_channel2], [2, 6, 7])]
             board_states = np.append(board_states, board_tensor, axis=0)
             policies = np.append(policies, [experience[1]], axis=0)
-            values = np.append(values, experience[3])
+            values = np.append(values, [[experience[3]]], axis=0)
 
-        device = torch.device("cuda")
-        boards_tensor = torch.from_numpy(board_states).float().to(device)
-        policies_tensor = torch.from_numpy(policies).float().to(device)
-        values_tensor = torch.from_numpy(values).float().to(device)
+        boards_tensor = torch.from_numpy(board_states).float().to(self.device)
+        policies_tensor = torch.from_numpy(policies).float().to(self.device)
+        values_tensor = torch.from_numpy(values).float().to(self.device)
 
         optimizer = optim.Adam(self.parameters(), lr=0.001)        
         value_criterion = nn.MSELoss()
@@ -214,3 +234,111 @@ class AlphaZeroNet(nn.Module):
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
+
+
+class AlphaZeroResNet(nn.Module):
+    def __init__(self, channels=128, num_blocks=6, device="cuda", dropout=0.1):
+        super(AlphaZeroResNet, self).__init__()
+        self.channels = channels
+        self.num_blocks = num_blocks
+        self.dropout = dropout
+        self.device = torch.device(device)
+
+        self.conv = nn.Conv2d(2, channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(channels)
+        self.act = nn.SiLU(inplace=True)
+        self.res_blocks = nn.ModuleList([ResidualBlock(channels) for _ in range(num_blocks)])
+
+        self.pconv = nn.Conv2d(channels, 2, 1, bias=False)
+        self.pbn = nn.BatchNorm2d(2)
+        self.pfc = nn.Linear(2 * 6 * 7, 7)
+
+        self.vconv = nn.Conv2d(channels, 1, 1, bias=False)
+        self.vbn = nn.BatchNorm2d(1)
+        self.vfc1 = nn.Linear(6 * 7, channels)
+        self.vfc2 = nn.Linear(channels, 1)
+
+        self.to(self.device)
+
+    def _encode(self, board, player=None):
+        channel1 = np.zeros((6, 7), dtype=int)
+        channel2 = np.zeros((6, 7), dtype=int)
+        if player is None or player == 1:
+            channel1[np.where(board == 1)] = 1
+            channel2[np.where(board == 2)] = 1
+        else:
+            channel1[np.where(board == 2)] = 1
+            channel2[np.where(board == 1)] = 1
+        return np.append(channel1, channel2)
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        out = self.act(out)
+        for block in self.res_blocks:
+            out = block(out)
+
+        p = self.pconv(out)
+        p = self.pbn(p)
+        p = self.act(p)
+        p = p.view(-1, 2 * 6 * 7)
+        p = F.dropout(p, p=self.dropout, training=self.training)
+        p = self.pfc(p)
+
+        v = self.vconv(out)
+        v = self.vbn(v)
+        v = self.act(v)
+        v = v.view(-1, 6 * 7)
+        v = self.vfc1(v)
+        v = self.act(v)
+        v = F.dropout(v, p=self.dropout, training=self.training)
+        v = self.vfc2(v)
+
+        return F.log_softmax(p, dim=1), torch.tanh(v)
+
+    def predict(self, board, player=None):
+        encoded = self._encode(board, player)
+        input = torch.from_numpy(encoded).reshape(1, 2, 6, 7).float().to(self.device)
+        return self.forward(input)
+
+    def process_data(self, data, iters=10, lr=1e-3, weight_decay=1e-4):
+        self.train()
+        board_states = np.empty((0, 2, 6, 7))
+        policies = np.empty((0, 7))
+        values = np.empty((0, 1))
+
+        for experience in data:
+            board = experience[0]
+            player = experience[2] if len(experience) > 2 else 1
+            encoded = self._encode(board, player)
+            board_tensor = [np.reshape(encoded, [2, 6, 7])]
+            board_states = np.append(board_states, board_tensor, axis=0)
+            policies = np.append(policies, [experience[1]], axis=0)
+            values = np.append(values, [[experience[3]]], axis=0)
+
+        boards_tensor = torch.from_numpy(board_states).float().to(self.device)
+        policies_tensor = torch.from_numpy(policies).float().to(self.device)
+        values_tensor = torch.from_numpy(values).float().to(self.device)
+
+        optimizer = optim.AdamW(self.parameters(), lr=lr, weight_decay=weight_decay)
+        value_criterion = nn.MSELoss()
+
+        value_losses = []
+        policy_losses = []
+        for _ in range(iters):
+            policies_predicted, values_predicted = self.forward(boards_tensor)
+            value_loss = value_criterion(values_predicted, values_tensor)
+            policy_loss = -torch.sum(policies_tensor * policies_predicted) / policies_tensor.size(0)
+            total_loss = policy_loss + value_loss
+            print("v: %f p: %f" % (value_loss.item(), policy_loss.item()))
+            value_losses.append(value_loss.item())
+            policy_losses.append(policy_loss.item())
+            optimizer.zero_grad()
+            total_loss.backward()
+            optimizer.step()
+        if value_losses and policy_losses:
+            return {
+                "value_loss": float(np.mean(value_losses)),
+                "policy_loss": float(np.mean(policy_losses)),
+            }
+        return None

@@ -1,10 +1,11 @@
 import torch
 import numpy as np
 from connect4 import Connect4
-from neuralnetwork import NNet
+from neuralnetwork import AlphaZeroResNet
 from mcts import AlphaZeroMCTS
 
-net = NNet(256, "cuda")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+net = AlphaZeroResNet(128, num_blocks=6, device=device)
 # net = torch.load("/home/psior/Reinforcement-Learning/python/connectfo_256.net")
 net.eval()
 np.set_printoptions(precision=4)
