@@ -15,13 +15,13 @@ class Connect4:
         open_row = self.get_open_row(column)
         if open_row >= 0:
             self.board[open_row, column] = self.player
-            if self.is_draw():
-                self.game_over = True
-                self.draw = True
-            elif self.is_win((open_row, column)):
+            if self.is_win((open_row, column)):
                 self.game_over = True
                 self.draw = False
                 self.winner = self.player
+            elif self.is_draw():
+                self.game_over = True
+                self.draw = True
             self.player = 1 if self.player == 2 else 2
         else:
             print("invalid move: ")
@@ -32,10 +32,7 @@ class Connect4:
         if self.draw or not self.game_over:
             return 0
 
-        if self.winner != player:
-            return 1
-        else:
-            return -1
+        return 1 if self.winner == player else -1
         
     def count_matches(self, index, delta):
         count = 0
@@ -72,6 +69,10 @@ class Connect4:
             return True
 
         diagonal_matches = 1 + self.count_matches(position, (1, 1)) + self.count_matches(position, (-1, -1))
+        if diagonal_matches >= 4:
+            return True
+
+        diagonal_matches = 1 + self.count_matches(position, (1, -1)) + self.count_matches(position, (-1, 1))
         if diagonal_matches >= 4:
             return True
 
