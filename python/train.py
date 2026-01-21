@@ -75,6 +75,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--stop-after-upgrades", type=int, default=0)
+    parser.add_argument("--stop-after-stalemates", type=int, default=0, help="Stop after N consecutive 100%% draw duels")
     return parser.parse_args()
 
 args = parse_args()
@@ -98,6 +99,7 @@ dirichlet_frac = args.dirichlet_frac
 learning_rate = args.lr
 weight_decay = args.weight_decay
 stop_after_upgrades = args.stop_after_upgrades
+stop_after_stalemates = args.stop_after_stalemates
 draw_value = 1e-4
 network_file = "connect4_%s.net" % args.net
 if args.device == "auto":
@@ -270,6 +272,7 @@ pending_self_play_notice = True
 training_episodes = 0
 elo_new, elo_old = 1500.0, 1500.0
 consecutive_upgrades = 0
+consecutive_stalemates = 0
 if args.net == "light":
     run_name = args.run_name or "light_c%d_mcts%d_bs%d" % (
         channel_width,
@@ -396,8 +399,19 @@ try:
                     print("Iter %d duel: new=%d prev=%d draws=%d win_rate=%.1f%%" % (
                         iter_id, scores["wins"], scores["losses"], scores["draws"], win_rate
                     ))
-                # Use win_rate (wins / decisive games) instead of score_rate
-                # to match alpha-zero-general's acceptance criterion
+                # Check for stalemate (100% draws)
+                is_stalemate = scores["draws"] == args.duel_games
+                if is_stalemate:
+                    consecutive_stalemates += 1
+                    if minimal_logging:
+                        print("Iter %d stalemate detected (%d consecutive)" % (iter_id, consecutive_stalemates))
+                else:
+                    consecutive_stalemates = 0
+                # Check for stalemate termination
+                if stop_after_stalemates > 0 and consecutive_stalemates >= stop_after_stalemates:
+                    if minimal_logging:
+                        print("Reached %d consecutive stalemates. Training converged!" % stop_after_stalemates)
+                    break
                 if win_rate >= duel_acceptance:
                     net.load_state_dict(training_net.state_dict())
                     torch.save(

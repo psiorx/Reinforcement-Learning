@@ -100,8 +100,7 @@ class AlphaZeroMCTS:
             return value
 
         node = self.nodes[board_key]
-        # UCB formula: treat unvisited actions specially (no division) to encourage exploration
-        # This matches the alpha-zero-general reference implementation
+        # UCB formula: treat unvisited actions specially to encourage exploration
         total_N = sum(node.N)
         U = np.where(
             node.N == 0,
@@ -153,8 +152,7 @@ class AlphaZeroMCTS:
             return value
 
         node = self.nodes[board_key]
-        # UCB formula: treat unvisited actions specially (no division) to encourage exploration
-        # This matches the alpha-zero-general reference implementation
+        # UCB formula: treat unvisited actions specially to encourage exploration
         total_N = sum(node.N)
         U = np.where(
             node.N == 0,
