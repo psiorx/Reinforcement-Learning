@@ -75,16 +75,10 @@ class NNet(nn.Module):
         return F.log_softmax(pi, dim=1), torch.tanh(v)
 
     def predict(self, board, player=None):
-        channel1 = np.zeros((6, 7), dtype=int)
-        channel2 = np.zeros((6, 7), dtype=int)
-        if player is None or player == 1:
-            channel1[np.where(board == 1)] = 1
-            channel2[np.where(board == 2)] = 1
-        else:
-            channel1[np.where(board == 2)] = 1
-            channel2[np.where(board == 1)] = 1
-        input = torch.from_numpy(np.append(channel1, channel2)).reshape(1, 2, 6, 7).float().to(self.device)
-        return self.forward(input)
+        encoded = self._encode(board, player)
+        input = torch.from_numpy(encoded).reshape(1, 2, 6, 7).float().to(self.device)
+        with torch.no_grad():
+            return self.forward(input)
 
     def process_data(self, data, iters):
         self.train()
@@ -153,6 +147,17 @@ class AlphaZeroNet(nn.Module):
         self.device = torch.device(device)
         self.to(self.device)
 
+    def _encode(self, board, player=None):
+        channel1 = np.zeros((6, 7), dtype=int)
+        channel2 = np.zeros((6, 7), dtype=int)
+        if player is None or player == 1:
+            channel1[np.where(board == 1)] = 1
+            channel2[np.where(board == 2)] = 1
+        else:
+            channel1[np.where(board == 2)] = 1
+            channel2[np.where(board == 1)] = 1
+        return np.append(channel1, channel2)
+
     # #2x1x1 conv -> bn -> relu -> fc
     def policy_head(self, x):
         out = self.pconv1(x) 
@@ -191,53 +196,65 @@ class AlphaZeroNet(nn.Module):
             channel1[np.where(board == 2)] = 1
             channel2[np.where(board == 1)] = 1
         input = torch.from_numpy(np.append(channel1, channel2)).reshape(1, 2, 6, 7).float().to(self.device)
-        return self.forward(input)
+        with torch.no_grad():
+            return self.forward(input)
 
-    def process_data(self, data):
+    def process_data(self, data, epochs=10, batch_size=64, lr=1e-3, weight_decay=0.0):
         self.train()
-        board_states = np.empty((0, 2, 6, 7))
-        policies = np.empty((0, 7))
-        values = np.empty((0, 1))
-        for experience in data:
-            board = experience[0]
-            player = experience[2] if len(experience) > 2 else 1
-            board_channel1 = np.zeros((6, 7))
-            if player == 1:
-                board_channel1[np.where(board == 1)] = 1
-            else:
-                board_channel1[np.where(board == 2)] = 1
-            
-            board_channel2 = np.zeros((6, 7))
-            if player == 1:
-                board_channel2[np.where(board == 2)] = 1
-            else:
-                board_channel2[np.where(board == 1)] = 1
-
-            board_tensor = [np.reshape([board_channel1, board_channel2], [2, 6, 7])]
-            board_states = np.append(board_states, board_tensor, axis=0)
-            policies = np.append(policies, [experience[1]], axis=0)
-            values = np.append(values, [[experience[3]]], axis=0)
-
-        boards_tensor = torch.from_numpy(board_states).float().to(self.device)
-        policies_tensor = torch.from_numpy(policies).float().to(self.device)
-        values_tensor = torch.from_numpy(values).float().to(self.device)
-
-        optimizer = optim.Adam(self.parameters(), lr=0.001)        
+        data = list(data)
+        if not data:
+            return None
+        optimizer = optim.AdamW(self.parameters(), lr=lr, weight_decay=weight_decay)
         value_criterion = nn.MSELoss()
 
-        for i in range(10):
-            policies_predicted, values_predicted = self.forward(boards_tensor)
-            value_loss = value_criterion(values_predicted, values_tensor)
-            policy_loss = -torch.sum(policies_tensor*policies_predicted)/policies_tensor.size()[0]
-            total_loss = policy_loss + value_loss
-            print("v: %f p: %f" % (value_loss.item(), policy_loss.item()))
-            optimizer.zero_grad()
-            total_loss.backward()
-            optimizer.step()
+        epoch_value_losses = []
+        epoch_policy_losses = []
+        batch_count = max(1, len(data) // batch_size)
+        for epoch_idx in range(epochs):
+            value_losses = []
+            policy_losses = []
+            for _ in range(batch_count):
+                sample_ids = np.random.randint(len(data), size=batch_size)
+                boards = np.empty((batch_size, 2, 6, 7), dtype=np.float32)
+                policies = np.empty((batch_size, 7), dtype=np.float32)
+                values = np.empty((batch_size, 1), dtype=np.float32)
+
+                for i, idx in enumerate(sample_ids):
+                    board, policy, player, value = data[idx]
+                    encoded = self._encode(board, player)
+                    boards[i] = np.reshape(encoded, [2, 6, 7])
+                    policies[i] = policy
+                    values[i] = value
+
+                boards_tensor = torch.from_numpy(boards).float().to(self.device)
+                policies_tensor = torch.from_numpy(policies).float().to(self.device)
+                values_tensor = torch.from_numpy(values).float().to(self.device)
+
+                policies_predicted, values_predicted = self.forward(boards_tensor)
+                value_loss = value_criterion(values_predicted, values_tensor)
+                policy_loss = -torch.sum(policies_tensor * policies_predicted) / policies_tensor.size(0)
+                total_loss = policy_loss + value_loss
+                value_losses.append(value_loss.item())
+                policy_losses.append(policy_loss.item())
+                optimizer.zero_grad()
+                total_loss.backward()
+                optimizer.step()
+            epoch_value_losses.append(float(np.mean(value_losses)))
+            epoch_policy_losses.append(float(np.mean(policy_losses)))
+            print(
+                "epoch %d/%d | batches=%d | Loss_pi=%.5f | Loss_v=%.5f"
+                % (epoch_idx + 1, epochs, batch_count, epoch_policy_losses[-1], epoch_value_losses[-1])
+            )
+        if epoch_value_losses and epoch_policy_losses:
+            return {
+                "value_loss": float(np.mean(epoch_value_losses)),
+                "policy_loss": float(np.mean(epoch_policy_losses)),
+            }
+        return None
 
 
 class AlphaZeroResNet(nn.Module):
-    def __init__(self, channels=128, num_blocks=6, device="cuda", dropout=0.1):
+    def __init__(self, channels=128, num_blocks=6, device="cuda", dropout=0.3):
         super(AlphaZeroResNet, self).__init__()
         self.channels = channels
         self.num_blocks = num_blocks
@@ -299,46 +316,55 @@ class AlphaZeroResNet(nn.Module):
     def predict(self, board, player=None):
         encoded = self._encode(board, player)
         input = torch.from_numpy(encoded).reshape(1, 2, 6, 7).float().to(self.device)
-        return self.forward(input)
+        with torch.no_grad():
+            return self.forward(input)
 
-    def process_data(self, data, iters=10, lr=1e-3, weight_decay=1e-4):
+    def process_data(self, data, epochs=10, batch_size=64, lr=1e-3, weight_decay=0.0):
         self.train()
-        board_states = np.empty((0, 2, 6, 7))
-        policies = np.empty((0, 7))
-        values = np.empty((0, 1))
-
-        for experience in data:
-            board = experience[0]
-            player = experience[2] if len(experience) > 2 else 1
-            encoded = self._encode(board, player)
-            board_tensor = [np.reshape(encoded, [2, 6, 7])]
-            board_states = np.append(board_states, board_tensor, axis=0)
-            policies = np.append(policies, [experience[1]], axis=0)
-            values = np.append(values, [[experience[3]]], axis=0)
-
-        boards_tensor = torch.from_numpy(board_states).float().to(self.device)
-        policies_tensor = torch.from_numpy(policies).float().to(self.device)
-        values_tensor = torch.from_numpy(values).float().to(self.device)
-
+        data = list(data)
+        if not data:
+            return None
         optimizer = optim.AdamW(self.parameters(), lr=lr, weight_decay=weight_decay)
         value_criterion = nn.MSELoss()
 
-        value_losses = []
-        policy_losses = []
-        for _ in range(iters):
-            policies_predicted, values_predicted = self.forward(boards_tensor)
-            value_loss = value_criterion(values_predicted, values_tensor)
-            policy_loss = -torch.sum(policies_tensor * policies_predicted) / policies_tensor.size(0)
-            total_loss = policy_loss + value_loss
-            print("v: %f p: %f" % (value_loss.item(), policy_loss.item()))
-            value_losses.append(value_loss.item())
-            policy_losses.append(policy_loss.item())
-            optimizer.zero_grad()
-            total_loss.backward()
-            optimizer.step()
+        epoch_value_losses = []
+        epoch_policy_losses = []
+        batch_count = max(1, len(data) // batch_size)
+        for _ in range(epochs):
+            value_losses = []
+            policy_losses = []
+            for _ in range(batch_count):
+                sample_ids = np.random.randint(len(data), size=batch_size)
+                boards = np.empty((batch_size, 2, 6, 7), dtype=np.float32)
+                policies = np.empty((batch_size, 7), dtype=np.float32)
+                values = np.empty((batch_size, 1), dtype=np.float32)
+
+                for i, idx in enumerate(sample_ids):
+                    board, policy, player, value = data[idx]
+                    encoded = self._encode(board, player)
+                    boards[i] = np.reshape(encoded, [2, 6, 7])
+                    policies[i] = policy
+                    values[i] = value
+
+                boards_tensor = torch.from_numpy(boards).float().to(self.device)
+                policies_tensor = torch.from_numpy(policies).float().to(self.device)
+                values_tensor = torch.from_numpy(values).float().to(self.device)
+
+                policies_predicted, values_predicted = self.forward(boards_tensor)
+                value_loss = value_criterion(values_predicted, values_tensor)
+                policy_loss = -torch.sum(policies_tensor * policies_predicted) / policies_tensor.size(0)
+                total_loss = policy_loss + value_loss
+                value_losses.append(value_loss.item())
+                policy_losses.append(policy_loss.item())
+                optimizer.zero_grad()
+                total_loss.backward()
+                optimizer.step()
+            epoch_value_losses.append(float(np.mean(value_losses)))
+            epoch_policy_losses.append(float(np.mean(policy_losses)))
+            print("v: %f p: %f" % (epoch_value_losses[-1], epoch_policy_losses[-1]))
         if value_losses and policy_losses:
             return {
-                "value_loss": float(np.mean(value_losses)),
-                "policy_loss": float(np.mean(policy_losses)),
+                "value_loss": float(np.mean(epoch_value_losses)),
+                "policy_loss": float(np.mean(epoch_policy_losses)),
             }
         return None

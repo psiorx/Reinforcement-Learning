@@ -11,7 +11,7 @@ import torch
 
 from connect4 import Connect4
 from mcts import AlphaZeroMCTS
-from neuralnetwork import AlphaZeroResNet
+from neuralnetwork import AlphaZeroNet, AlphaZeroResNet
 
 
 def parse_args():
@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument("--agent1", choices=["human", "mcts", "random"], default="human")
     parser.add_argument("--agent2", choices=["human", "mcts", "random"], default="mcts")
     parser.add_argument("--mcts-iters", type=int, default=200)
-    parser.add_argument("--net", type=str, default="connect4_resnet.net")
+    parser.add_argument("--net", type=str, default="connect4_light.net")
     parser.add_argument("--channels", type=int, default=128)
     parser.add_argument("--blocks", type=int, default=8)
     parser.add_argument("--device", type=str, default="")
@@ -79,7 +79,32 @@ class Connect4Pygame:
         if self.args.agent1 == "mcts" or self.args.agent2 == "mcts":
             device = self.args.device or ("cuda" if torch.cuda.is_available() else "cpu")
             if os.path.isfile(self.args.net):
-                self.net = torch.load(self.args.net, map_location=device)
+                try:
+                    checkpoint = torch.load(self.args.net, map_location=device, weights_only=True)
+                except TypeError:
+                    checkpoint = torch.load(self.args.net, map_location=device)
+                except Exception:
+                    from torch.serialization import safe_globals
+                    with safe_globals([AlphaZeroNet, AlphaZeroResNet]):
+                        checkpoint = torch.load(self.args.net, map_location=device, weights_only=False)
+                if isinstance(checkpoint, torch.nn.Module):
+                    self.net = checkpoint
+                elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+                    net_type = checkpoint.get("net", "light")
+                    if net_type == "light":
+                        self.net = AlphaZeroNet(checkpoint.get("channels", 128), device=device)
+                    else:
+                        self.net = AlphaZeroResNet(
+                            checkpoint.get("channels", 128),
+                            num_blocks=checkpoint.get("blocks", 6),
+                            device=device,
+                        )
+                    self.net.load_state_dict(checkpoint["state_dict"])
+                elif isinstance(checkpoint, dict):
+                    self.net = AlphaZeroNet(self.args.channels, device=device)
+                    self.net.load_state_dict(checkpoint)
+                else:
+                    raise RuntimeError("Unsupported checkpoint format: %s" % type(checkpoint))
             else:
                 self.net = AlphaZeroResNet(self.args.channels, num_blocks=self.args.blocks, device=device)
             self.net.eval()
