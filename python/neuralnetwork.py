@@ -199,7 +199,7 @@ class AlphaZeroNet(nn.Module):
         with torch.no_grad():
             return self.forward(input)
 
-    def process_data(self, data, epochs=10, batch_size=64, lr=1e-3, weight_decay=0.0):
+    def process_data(self, data, epochs=10, batch_size=64, lr=1e-3, weight_decay=0.0, minimal_logging=False):
         self.train()
         data = list(data)
         if not data:
@@ -210,6 +210,8 @@ class AlphaZeroNet(nn.Module):
         epoch_value_losses = []
         epoch_policy_losses = []
         batch_count = max(1, len(data) // batch_size)
+        first_loss = None
+        last_loss = None
         for epoch_idx in range(epochs):
             value_losses = []
             policy_losses = []
@@ -236,19 +238,25 @@ class AlphaZeroNet(nn.Module):
                 total_loss = policy_loss + value_loss
                 value_losses.append(value_loss.item())
                 policy_losses.append(policy_loss.item())
+                if first_loss is None:
+                    first_loss = (policy_loss.item(), value_loss.item())
+                last_loss = (policy_loss.item(), value_loss.item())
                 optimizer.zero_grad()
                 total_loss.backward()
                 optimizer.step()
             epoch_value_losses.append(float(np.mean(value_losses)))
             epoch_policy_losses.append(float(np.mean(policy_losses)))
-            print(
-                "epoch %d/%d | batches=%d | Loss_pi=%.5f | Loss_v=%.5f"
-                % (epoch_idx + 1, epochs, batch_count, epoch_policy_losses[-1], epoch_value_losses[-1])
-            )
+            if not minimal_logging:
+                print(
+                    "epoch %d/%d | batches=%d | Loss_pi=%.5f | Loss_v=%.5f"
+                    % (epoch_idx + 1, epochs, batch_count, epoch_policy_losses[-1], epoch_value_losses[-1])
+                )
         if epoch_value_losses and epoch_policy_losses:
             return {
                 "value_loss": float(np.mean(epoch_value_losses)),
                 "policy_loss": float(np.mean(epoch_policy_losses)),
+                "start": first_loss,
+                "end": last_loss,
             }
         return None
 
@@ -319,7 +327,7 @@ class AlphaZeroResNet(nn.Module):
         with torch.no_grad():
             return self.forward(input)
 
-    def process_data(self, data, epochs=10, batch_size=64, lr=1e-3, weight_decay=0.0):
+    def process_data(self, data, epochs=10, batch_size=64, lr=1e-3, weight_decay=0.0, minimal_logging=False):
         self.train()
         data = list(data)
         if not data:
@@ -330,6 +338,8 @@ class AlphaZeroResNet(nn.Module):
         epoch_value_losses = []
         epoch_policy_losses = []
         batch_count = max(1, len(data) // batch_size)
+        first_loss = None
+        last_loss = None
         for _ in range(epochs):
             value_losses = []
             policy_losses = []
@@ -356,15 +366,21 @@ class AlphaZeroResNet(nn.Module):
                 total_loss = policy_loss + value_loss
                 value_losses.append(value_loss.item())
                 policy_losses.append(policy_loss.item())
+                if first_loss is None:
+                    first_loss = (policy_loss.item(), value_loss.item())
+                last_loss = (policy_loss.item(), value_loss.item())
                 optimizer.zero_grad()
                 total_loss.backward()
                 optimizer.step()
             epoch_value_losses.append(float(np.mean(value_losses)))
             epoch_policy_losses.append(float(np.mean(policy_losses)))
-            print("v: %f p: %f" % (epoch_value_losses[-1], epoch_policy_losses[-1]))
+            if not minimal_logging:
+                print("v: %f p: %f" % (epoch_value_losses[-1], epoch_policy_losses[-1]))
         if value_losses and policy_losses:
             return {
                 "value_loss": float(np.mean(epoch_value_losses)),
                 "policy_loss": float(np.mean(epoch_policy_losses)),
+                "start": first_loss,
+                "end": last_loss,
             }
         return None

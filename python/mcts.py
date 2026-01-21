@@ -18,7 +18,7 @@ class Node:
         self.N = np.zeros(num_actions)
 
 class AlphaZeroMCTS:
-    def __init__(self, game, net, cpuct=1.0, dirichlet_alpha=0.0, dirichlet_frac=0.0):
+    def __init__(self, game, net, cpuct=1.0, dirichlet_alpha=0.0, dirichlet_frac=0.0, debug=False, tie_break="first", draw_value=1e-4):
         self.net = net
         self.orig_game = game
         self.game = copy.deepcopy(game)
@@ -26,11 +26,16 @@ class AlphaZeroMCTS:
         self.c = cpuct
         self.dirichlet_alpha = dirichlet_alpha
         self.dirichlet_frac = dirichlet_frac
+        self.tie_break = tie_break
+        self.draw_value = draw_value
         self.max_depth = 0
         self.player = self.orig_game.player
         self.functional = hasattr(game, "apply_action_to_board") and hasattr(game, "get_valid_actions_from")
         self.root_board = None
         self.root_player = None
+        self.debug = debug
+        self.debug_root_actions = []
+        self.debug_root_ucb = []
 
     def _key(self, board, player=None):
         if self.functional:
@@ -79,7 +84,7 @@ class AlphaZeroMCTS:
 
         if game_over:
             if draw:
-                return 0
+                return self.draw_value
             return 1 if winner == player else -1
 
         board_key = self._key(board, player)
@@ -95,10 +100,23 @@ class AlphaZeroMCTS:
             return value
 
         node = self.nodes[board_key]
-        U = node.Q + self.c * node.P * np.sqrt(sum(node.N)) / (1 + node.N)
+        # UCB formula: treat unvisited actions specially (no division) to encourage exploration
+        # This matches the alpha-zero-general reference implementation
+        total_N = sum(node.N)
+        U = np.where(
+            node.N == 0,
+            self.c * node.P * np.sqrt(total_N + 1e-8),  # Unvisited: higher exploration bonus
+            node.Q + self.c * node.P * np.sqrt(total_N) / (1 + node.N)  # Visited: standard UCB
+        )
         U[np.where(node.valid_actions == 0)] = -1e9
         max_indexes = np.where(U == max(U))[0]
-        action_index = np.random.choice(max_indexes)
+        if self.tie_break == "random":
+            action_index = int(np.random.choice(max_indexes))
+        else:
+            action_index = int(max_indexes[0])
+        if self.debug and depth == 0:
+            self.debug_root_ucb.append(U.copy())
+            self.debug_root_actions.append(int(action_index))
 
         next_board, next_player, next_game_over, next_draw, next_winner = self.orig_game.apply_action_to_board(
             board, player, action_index
@@ -119,7 +137,7 @@ class AlphaZeroMCTS:
 
         if self.game.game_over:
             if self.game.draw:
-                return 0
+                return self.draw_value
             return 1 if self.game.winner == self.game.player else -1
 
         board_key = self.game.board.tobytes()
@@ -135,10 +153,23 @@ class AlphaZeroMCTS:
             return value
 
         node = self.nodes[board_key]
-        U = node.Q + self.c * node.P * np.sqrt(sum(node.N)) / (1 + node.N)
+        # UCB formula: treat unvisited actions specially (no division) to encourage exploration
+        # This matches the alpha-zero-general reference implementation
+        total_N = sum(node.N)
+        U = np.where(
+            node.N == 0,
+            self.c * node.P * np.sqrt(total_N + 1e-8),  # Unvisited: higher exploration bonus
+            node.Q + self.c * node.P * np.sqrt(total_N) / (1 + node.N)  # Visited: standard UCB
+        )
         U[np.where(node.valid_actions == 0)] = -1e9
         max_indexes = np.where(U == max(U))[0]
-        action_index = np.random.choice(max_indexes)
+        if self.tie_break == "random":
+            action_index = int(np.random.choice(max_indexes))
+        else:
+            action_index = int(max_indexes[0])
+        if self.debug and depth == 0:
+            self.debug_root_ucb.append(U.copy())
+            self.debug_root_actions.append(int(action_index))
 
         self.game.take_action(action_index)
         child_value = self.search_internal_stateful(depth + 1)
