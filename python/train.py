@@ -66,6 +66,7 @@ def parse_args():
     parser.add_argument("--duel-acceptance", type=float, default=60.0)
     parser.add_argument("--temperature-moves", type=int, default=15)
     parser.add_argument("--min-exp-size", type=int, default=15000)
+    parser.add_argument("--num-eps", type=int, default=100, help="Number of self-play games per iteration")
     parser.add_argument("--history-iters", type=int, default=20)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
@@ -203,7 +204,10 @@ def compare_agents(new_net, orig_net, num_games, mcts_iters, use_tqdm=True):
                 draw_value=draw_value,
             )
             policy = mcts.search(mcts_iters)
-            action = int(np.argmax(policy))
+            # Random tie-breaking among best actions
+            max_val = np.max(policy)
+            best_actions = np.where(policy == max_val)[0]
+            action = int(np.random.choice(best_actions))
             game.take_action(action)
 
         if game.draw:
@@ -256,6 +260,8 @@ history_examples = deque(maxlen=history_iters)
 recent_game_lengths = deque(maxlen=100)
 total_self_play_games = 0
 total_self_play_moves = 0
+iter_games = 0  # Games played in current iteration
+num_eps = args.num_eps  # Target games per iteration
 start_time = time.time()
 pool_bar = None
 last_pool_count = 0
@@ -293,6 +299,7 @@ try:
             print("Iter %d self-play start" % iter_id)
             pending_self_play_notice = False
         total_self_play_games += 1
+        iter_games += 1
         total_self_play_moves += len(game_experience)
         recent_game_lengths.append(len(game_experience))
         writer.add_scalar("self_play/games_total", total_self_play_games, training_episodes)
@@ -315,20 +322,22 @@ try:
             exp_pool.append(e)
             if len(exp_pool) > exp_pool_size:
                 exp_pool.popleft()
-        if len(exp_pool) < min_exp_size:
+        # Progress bar showing games in current iteration
+        if iter_games < num_eps:
             if pool_bar is None and not minimal_logging:
-                pool_bar = tqdm(total=min_exp_size, desc="exp_pool", ascii=True, leave=False)
+                pool_bar = tqdm(total=num_eps, desc="self_play", ascii=True, leave=False)
                 last_pool_count = 0
-            pool_count = min(len(exp_pool), min_exp_size)
-            delta = max(0, pool_count - last_pool_count)
+            delta = max(0, iter_games - last_pool_count)
             if delta and pool_bar is not None:
                 pool_bar.update(delta)
-                last_pool_count = pool_count
+                last_pool_count = iter_games
         elif pool_bar is not None:
             pool_bar.close()
             pool_bar = None
+            last_pool_count = 0
 
-        if len(exp_pool) >= min_exp_size and len(exp_pool) > batch_size:
+        # Train after completing num_eps games, but require minimum examples
+        if iter_games >= num_eps and len(exp_pool) >= min(min_exp_size, batch_size * 10):
             training_indexes = np.random.choice(range(len(exp_pool)), batch_size, replace=False)
             batch = []
             for idx in training_indexes:
@@ -411,6 +420,7 @@ try:
                     consecutive_upgrades = 0
                 history_examples.append(deque(exp_pool))
                 exp_pool = deque()
+                iter_games = 0  # Reset game counter for next iteration
                 pending_self_play_notice = True
                 if stop_after_upgrades > 0 and consecutive_upgrades >= stop_after_upgrades:
                     if not minimal_logging:
@@ -421,6 +431,7 @@ try:
                 print("Iter %d result: skipped" % iter_id)
                 history_examples.append(deque(exp_pool))
                 exp_pool = deque()
+                iter_games = 0  # Reset game counter for next iteration
                 pending_self_play_notice = True
             if max_episodes is not None and training_episodes >= max_episodes:
                 if not minimal_logging:
