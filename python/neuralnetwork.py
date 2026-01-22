@@ -243,6 +243,17 @@ class AlphaZeroNet(nn.Module):
                 last_loss = (policy_loss.item(), value_loss.item())
                 optimizer.zero_grad()
                 total_loss.backward()
+                
+                # Compute gradient norm
+                grad_norm = 0.0
+                for p in self.parameters():
+                    if p.grad is not None:
+                        grad_norm += p.grad.data.norm(2).item() ** 2
+                grad_norm = grad_norm ** 0.5
+                if 'grad_norms' not in dir():
+                    grad_norms = []
+                grad_norms.append(grad_norm)
+                
                 optimizer.step()
             epoch_value_losses.append(float(np.mean(value_losses)))
             epoch_policy_losses.append(float(np.mean(policy_losses)))
@@ -251,12 +262,18 @@ class AlphaZeroNet(nn.Module):
                     "epoch %d/%d | batches=%d | Loss_pi=%.5f | Loss_v=%.5f"
                     % (epoch_idx + 1, epochs, batch_count, epoch_policy_losses[-1], epoch_value_losses[-1])
                 )
+        
+        # Compute value prediction accuracy (how well values match targets)
+        value_pred_error = float(np.mean(value_losses)) ** 0.5  # RMSE
+        
         if epoch_value_losses and epoch_policy_losses:
             return {
                 "value_loss": float(np.mean(epoch_value_losses)),
                 "policy_loss": float(np.mean(epoch_policy_losses)),
                 "start": first_loss,
                 "end": last_loss,
+                "grad_norm": float(np.mean(grad_norms)) if 'grad_norms' in dir() and grad_norms else 0.0,
+                "value_pred_error": value_pred_error,
             }
         return None
 
@@ -371,15 +388,32 @@ class AlphaZeroResNet(nn.Module):
                 last_loss = (policy_loss.item(), value_loss.item())
                 optimizer.zero_grad()
                 total_loss.backward()
+                
+                # Compute gradient norm
+                grad_norm = 0.0
+                for p in self.parameters():
+                    if p.grad is not None:
+                        grad_norm += p.grad.data.norm(2).item() ** 2
+                grad_norm = grad_norm ** 0.5
+                if 'grad_norms' not in dir():
+                    grad_norms = []
+                grad_norms.append(grad_norm)
+                
                 optimizer.step()
             epoch_value_losses.append(float(np.mean(value_losses)))
             epoch_policy_losses.append(float(np.mean(policy_losses)))
             if not minimal_logging:
                 print("v: %f p: %f" % (epoch_value_losses[-1], epoch_policy_losses[-1]))
+        
+        # Compute value prediction accuracy (how well values match targets)
+        value_pred_error = float(np.mean(value_losses)) ** 0.5 if value_losses else 0.0  # RMSE
+        
         if value_losses and policy_losses:
             return {
                 "value_loss": float(np.mean(epoch_value_losses)),
                 "policy_loss": float(np.mean(epoch_policy_losses)),
+                "grad_norm": float(np.mean(grad_norms)) if 'grad_norms' in dir() and grad_norms else 0.0,
+                "value_pred_error": value_pred_error,
                 "start": first_loss,
                 "end": last_loss,
             }

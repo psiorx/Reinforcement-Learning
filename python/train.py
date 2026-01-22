@@ -47,7 +47,7 @@ def load_checkpoint(path, device, fallback_net, quiet=False):
     return None, fallback_net
 from mcts import AlphaZeroMCTS
 from collections import deque
-from threading import Thread
+from threading import Thread, Lock
 
 def parse_args():
     parser = argparse.ArgumentParser(description="AlphaZero training loop for Connect4.")
@@ -70,8 +70,8 @@ def parse_args():
     parser.add_argument("--history-iters", type=int, default=20)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
-    parser.add_argument("--dirichlet-alpha", type=float, default=0.3)
-    parser.add_argument("--dirichlet-frac", type=float, default=0.25)
+    parser.add_argument("--dirichlet-alpha", type=float, default=0.0)  # 0 to match reference (no noise)
+    parser.add_argument("--dirichlet-frac", type=float, default=0.0)   # 0 to match reference (no noise)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--stop-after-upgrades", type=int, default=0)
@@ -133,8 +133,12 @@ def update_elo(new_elo, old_elo, score, k_factor):
 
 def apply_temperature(policy, temperature):
     if temperature <= 0:
+        # Random tie-breaking among best actions (like reference)
+        max_val = np.max(policy)
+        best_indices = np.where(policy == max_val)[0]
+        chosen = np.random.choice(best_indices)
         one_hot = np.zeros_like(policy)
-        one_hot[int(np.argmax(policy))] = 1.0
+        one_hot[chosen] = 1.0
         return one_hot
     if temperature == 1:
         return policy
@@ -144,27 +148,53 @@ def apply_temperature(policy, temperature):
         return policy
     return tempered / tempered_sum
 
+def compute_entropy(policy):
+    """Compute entropy of a probability distribution."""
+    policy = np.clip(policy, 1e-10, 1.0)
+    return -np.sum(policy * np.log(policy))
+
 def get_experience(current_net):
     current_net.eval()
     game = Connect4()            
     experiences = []
     move_count = 0
+    policy_entropies = []
+    mcts_depths = []
+    mcts_node_counts = []
+    root_values = []
+    
+    # Create ONE MCTS instance per game - reuse tree across moves!
+    mcts = AlphaZeroMCTS(
+        game,
+        current_net,
+        cpuct=1.0,
+        dirichlet_alpha=dirichlet_alpha,
+        dirichlet_frac=dirichlet_frac,
+        draw_value=draw_value,
+    )
+    
     while not game.game_over:
-        mcts = AlphaZeroMCTS(
-            game,
-            current_net,
-            cpuct=1.0,
-            dirichlet_alpha=dirichlet_alpha,
-            dirichlet_frac=dirichlet_frac,
-            draw_value=draw_value,
-        )
         policy = mcts.search(mcts_iterations)
+        
+        # Track MCTS statistics
+        mcts_depths.append(mcts.max_depth)
+        mcts_node_counts.append(len(mcts.nodes))
+        
+        # Get root Q value (value of best action)
+        root_key = mcts._key(game.board, game.player)
+        if root_key in mcts.nodes:
+            root_node = mcts.nodes[root_key]
+            best_action = int(np.argmax(root_node.N))
+            root_values.append(root_node.Q[best_action])
+        
         temp = 1 if move_count < temperature_moves else 0
         policy = apply_temperature(policy, temp)
-        if temp > 0:
-            action = np.random.choice(range(len(policy)), p=policy)
-        else:
-            action = int(np.argmax(policy))
+        
+        # Track policy entropy
+        policy_entropies.append(compute_entropy(policy))
+        
+        # Sample action from policy (apply_temperature already handles temp=0 with random tie-breaking)
+        action = np.random.choice(range(len(policy)), p=policy)
         e = [copy.deepcopy(game.board), copy.deepcopy(policy), game.player, None]
         experiences.append(e)
         game.take_action(action)
@@ -180,7 +210,18 @@ def get_experience(current_net):
     for board, policy, player, value in experiences:
         augmented.append([board, policy, player, value])
         augmented.append([board[:, ::-1], policy[::-1], player, value])
-    return augmented
+    
+    # Return game stats along with experiences
+    stats = {
+        "winner": game.winner,
+        "draw": game.draw,
+        "first_player_won": game.winner == 1,
+        "avg_entropy": float(np.mean(policy_entropies)) if policy_entropies else 0,
+        "avg_mcts_depth": float(np.mean(mcts_depths)) if mcts_depths else 0,
+        "avg_mcts_nodes": float(np.mean(mcts_node_counts)) if mcts_node_counts else 0,
+        "avg_root_value": float(np.mean(root_values)) if root_values else 0,
+    }
+    return augmented, stats
 
 
 def compare_agents(new_net, orig_net, num_games, mcts_iters, use_tqdm=True):
@@ -189,6 +230,27 @@ def compare_agents(new_net, orig_net, num_games, mcts_iters, use_tqdm=True):
     draws = 0
     new_net_wins = 0
     new_net_losses = 0
+    
+    # Create persistent MCTS instances - reuse across ALL duel games (like reference)
+    # Use a dummy game for initialization, actual board comes from search
+    dummy_game = Connect4()
+    new_mcts = AlphaZeroMCTS(
+        dummy_game,
+        new_net,
+        cpuct=1.0,
+        dirichlet_alpha=0.0,
+        dirichlet_frac=0.0,
+        draw_value=draw_value,
+    )
+    orig_mcts = AlphaZeroMCTS(
+        dummy_game,
+        orig_net,
+        cpuct=1.0,
+        dirichlet_alpha=0.0,
+        dirichlet_frac=0.0,
+        draw_value=draw_value,
+    )
+    
     use_tqdm = use_tqdm and tqdm is not None
     duel_bar = tqdm(total=num_games, desc="duel", ascii=True, leave=False) if use_tqdm else None
     for i in range(num_games):
@@ -196,20 +258,12 @@ def compare_agents(new_net, orig_net, num_games, mcts_iters, use_tqdm=True):
         new_net_is_player1 = (i % 2 == 0)
         while not game.game_over:
             use_new_net = (game.player == 1 and new_net_is_player1) or (game.player == 2 and not new_net_is_player1)
-            net_to_use = new_net if use_new_net else orig_net
-            mcts = AlphaZeroMCTS(
-                game,
-                net_to_use,
-                cpuct=1.0,
-                dirichlet_alpha=0.0,
-                dirichlet_frac=0.0,
-                draw_value=draw_value,
-            )
+            mcts = new_mcts if use_new_net else orig_mcts
+            # Update the MCTS's game reference to current game state
+            mcts.orig_game = game
             policy = mcts.search(mcts_iters)
-            # Random tie-breaking among best actions
-            max_val = np.max(policy)
-            best_actions = np.where(policy == max_val)[0]
-            action = int(np.random.choice(best_actions))
+            # Deterministic duel action (match AZG Arena behavior)
+            action = int(np.argmax(policy))
             game.take_action(action)
 
         if game.draw:
@@ -241,18 +295,21 @@ def compare_agents(new_net, orig_net, num_games, mcts_iters, use_tqdm=True):
 
 q_out = Queue()
 stop_event = Event()
+weight_lock = Lock()  # Prevents weight updates during game generation
 
-def generate_experience(net, q_out, stop_event):
+def generate_experience(net, q_out, stop_event, weight_lock):
     while not stop_event.is_set():
-        exp = get_experience(net)
+        # Hold lock during entire game to prevent weight changes mid-game
+        with weight_lock:
+            exp, stats = get_experience(net)
         if stop_event.is_set():
             break
-        q_out.put(exp)
+        q_out.put((exp, stats))
 
 threads = []
 num_workers = args.num_workers
 for i in range(num_workers):
-    t = Thread(target=generate_experience, args=[net, q_out, stop_event])
+    t = Thread(target=generate_experience, args=[net, q_out, stop_event, weight_lock])
     t.daemon = False
     t.start()
     threads.append(t)
@@ -264,6 +321,18 @@ total_self_play_games = 0
 total_self_play_moves = 0
 iter_games = 0  # Games played in current iteration
 num_eps = args.num_eps  # Target games per iteration
+# Stats tracking for new metrics (cumulative across all iterations)
+p1_wins = 0
+p2_wins = 0
+draws_count = 0
+recent_entropies = deque(maxlen=100)
+recent_mcts_depths = deque(maxlen=100)
+recent_mcts_nodes = deque(maxlen=100)
+recent_root_values = deque(maxlen=100)
+# Per-iteration stats (reset each iteration)
+iter_p1_wins = 0
+iter_p2_wins = 0
+iter_draws = 0
 start_time = time.time()
 pool_bar = None
 last_pool_count = 0
@@ -292,11 +361,12 @@ writer = SummaryWriter(log_dir=os.path.join("runs", "connect4", run_name))
 try:
     while True:
         try:
-            game_experience = q_out.get(timeout=1.0)
+            result = q_out.get(timeout=1.0)
         except Empty:
             if stop_event.is_set():
                 break
             continue
+        game_experience, game_stats = result
         if minimal_logging and pending_self_play_notice:
             iter_id = training_episodes + 1
             print("Iter %d self-play start" % iter_id)
@@ -305,21 +375,23 @@ try:
         iter_games += 1
         total_self_play_moves += len(game_experience)
         recent_game_lengths.append(len(game_experience))
-        writer.add_scalar("self_play/games_total", total_self_play_games, training_episodes)
-        writer.add_scalar("self_play/moves_total", total_self_play_moves, training_episodes)
-        writer.add_scalar("self_play/last_game_length", len(game_experience), training_episodes)
-        writer.add_scalar(
-            "self_play/avg_game_length",
-            float(np.mean(recent_game_lengths)),
-            training_episodes,
-        )
-        writer.add_scalar("self_play/exp_pool_size", len(exp_pool), training_episodes)
-        elapsed = time.time() - start_time
-        writer.add_scalar("self_play/seconds_elapsed", elapsed, training_episodes)
-        if elapsed > 0:
-            writer.add_scalar("self_play/games_per_min", 60.0 * total_self_play_games / elapsed, training_episodes)
-            writer.add_scalar("self_play/moves_per_sec", total_self_play_moves / elapsed, training_episodes)
-        writer.flush()
+        
+        # Track game outcomes for first-player advantage
+        if game_stats["draw"]:
+            draws_count += 1
+            iter_draws += 1
+        elif game_stats["winner"] == 1:
+            p1_wins += 1
+            iter_p1_wins += 1
+        else:
+            p2_wins += 1
+            iter_p2_wins += 1
+        
+        # Track metrics for per-iteration averaging (logged at end of iteration)
+        recent_entropies.append(game_stats["avg_entropy"])
+        recent_mcts_depths.append(game_stats["avg_mcts_depth"])
+        recent_mcts_nodes.append(game_stats["avg_mcts_nodes"])
+        recent_root_values.append(game_stats["avg_root_value"])
 
         for e in game_experience:
             exp_pool.append(e)
@@ -339,8 +411,8 @@ try:
             pool_bar = None
             last_pool_count = 0
 
-        # Train after completing num_eps games, but require minimum examples
-        if iter_games >= num_eps and len(exp_pool) >= min(min_exp_size, batch_size * 10):
+        # Train after completing num_eps games (like reference - no minimum example count)
+        if iter_games >= num_eps:
             training_indexes = np.random.choice(range(len(exp_pool)), batch_size, replace=False)
             batch = []
             for idx in training_indexes:
@@ -373,6 +445,18 @@ try:
             if losses:
                 writer.add_scalar("loss/value", losses["value_loss"], training_episodes)
                 writer.add_scalar("loss/policy", losses["policy_loss"], training_episodes)
+                # Start/end losses for training progress within iteration
+                if "start" in losses and losses["start"]:
+                    writer.add_scalar("loss/policy_start", losses["start"][0], training_episodes)
+                    writer.add_scalar("loss/value_start", losses["start"][1], training_episodes)
+                if "end" in losses and losses["end"]:
+                    writer.add_scalar("loss/policy_end", losses["end"][0], training_episodes)
+                    writer.add_scalar("loss/value_end", losses["end"][1], training_episodes)
+                # New training metrics
+                if "grad_norm" in losses:
+                    writer.add_scalar("training/grad_norm", losses["grad_norm"], training_episodes)
+                if "value_pred_error" in losses:
+                    writer.add_scalar("training/value_pred_error", losses["value_pred_error"], training_episodes)
                 writer.flush()
             training_episodes += 1
             if training_episodes % duel_interval == 0:
@@ -413,7 +497,9 @@ try:
                         print("Reached %d consecutive stalemates. Training converged!" % stop_after_stalemates)
                     break
                 if win_rate >= duel_acceptance:
-                    net.load_state_dict(training_net.state_dict())
+                    # Acquire lock to ensure no workers are mid-game during weight update
+                    with weight_lock:
+                        net.load_state_dict(training_net.state_dict())
                     torch.save(
                         {
                             "state_dict": training_net.state_dict(),
@@ -432,9 +518,30 @@ try:
                     if minimal_logging:
                         print("Iter %d result: rejected" % iter_id)
                     consecutive_upgrades = 0
+                # Log per-iteration self-play stats (all metrics logged here, once per iteration)
+                iter_total = iter_p1_wins + iter_p2_wins + iter_draws
+                if iter_total > 0:
+                    writer.add_scalar("self_play/draw_rate", 100.0 * iter_draws / iter_total, training_episodes)
+                    iter_decisive = iter_p1_wins + iter_p2_wins
+                    if iter_decisive > 0:
+                        writer.add_scalar("self_play/p1_win_rate", 100.0 * iter_p1_wins / iter_decisive, training_episodes)
+                # Log other self-play metrics
+                writer.add_scalar("self_play/games_total", total_self_play_games, training_episodes)
+                writer.add_scalar("self_play/exp_pool_size", len(exp_pool), training_episodes)
+                writer.add_scalar("self_play/avg_game_length", float(np.mean(recent_game_lengths)) if recent_game_lengths else 0, training_episodes)
+                writer.add_scalar("self_play/policy_entropy", float(np.mean(recent_entropies)) if recent_entropies else 0, training_episodes)
+                writer.add_scalar("self_play/mcts_nodes", float(np.mean(recent_mcts_nodes)) if recent_mcts_nodes else 0, training_episodes)
+                elapsed = time.time() - start_time
+                if elapsed > 0:
+                    writer.add_scalar("self_play/games_per_min", 60.0 * total_self_play_games / elapsed, training_episodes)
+                writer.flush()
+                
                 history_examples.append(deque(exp_pool))
                 exp_pool = deque()
                 iter_games = 0  # Reset game counter for next iteration
+                iter_p1_wins = 0  # Reset per-iteration stats
+                iter_p2_wins = 0
+                iter_draws = 0
                 pending_self_play_notice = True
                 if stop_after_upgrades > 0 and consecutive_upgrades >= stop_after_upgrades:
                     if not minimal_logging:
@@ -443,9 +550,29 @@ try:
             elif minimal_logging:
                 print("Iter %d duel: new=0 prev=0 draws=0" % iter_id)
                 print("Iter %d result: skipped" % iter_id)
+                # Log per-iteration self-play stats
+                iter_total = iter_p1_wins + iter_p2_wins + iter_draws
+                if iter_total > 0:
+                    writer.add_scalar("self_play/draw_rate", 100.0 * iter_draws / iter_total, training_episodes)
+                    iter_decisive = iter_p1_wins + iter_p2_wins
+                    if iter_decisive > 0:
+                        writer.add_scalar("self_play/p1_win_rate", 100.0 * iter_p1_wins / iter_decisive, training_episodes)
+                writer.add_scalar("self_play/games_total", total_self_play_games, training_episodes)
+                writer.add_scalar("self_play/exp_pool_size", len(exp_pool), training_episodes)
+                writer.add_scalar("self_play/avg_game_length", float(np.mean(recent_game_lengths)) if recent_game_lengths else 0, training_episodes)
+                writer.add_scalar("self_play/policy_entropy", float(np.mean(recent_entropies)) if recent_entropies else 0, training_episodes)
+                writer.add_scalar("self_play/mcts_nodes", float(np.mean(recent_mcts_nodes)) if recent_mcts_nodes else 0, training_episodes)
+                elapsed = time.time() - start_time
+                if elapsed > 0:
+                    writer.add_scalar("self_play/games_per_min", 60.0 * total_self_play_games / elapsed, training_episodes)
+                writer.flush()
+                
                 history_examples.append(deque(exp_pool))
                 exp_pool = deque()
                 iter_games = 0  # Reset game counter for next iteration
+                iter_p1_wins = 0
+                iter_p2_wins = 0
+                iter_draws = 0
                 pending_self_play_notice = True
             if max_episodes is not None and training_episodes >= max_episodes:
                 if not minimal_logging:
